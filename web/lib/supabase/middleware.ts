@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { publicOrigin } from "@/lib/origin";
 
 // Pages anyone can open without logging in.
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth"];
@@ -45,17 +46,11 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   if (!user && !startsWithAny(path, PUBLIC_PATHS)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL("/login", publicOrigin(request)));
   }
 
   if (user && startsWithAny(path, GUEST_ONLY)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/inbox";
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL("/inbox", publicOrigin(request)));
   }
 
   return response;
