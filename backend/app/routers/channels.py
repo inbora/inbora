@@ -1,5 +1,5 @@
-"""The business's channels. Step 4 adds the website chat; WhatsApp and
-Instagram (Zernio) come in Step 5, email (Unipile) in Step 6."""
+"""The business's channels: website chat (Step 4), WhatsApp and Instagram
+through Zernio (Step 5). Email (Unipile) comes in Step 6."""
 import re
 import secrets
 from datetime import datetime, timezone
@@ -8,7 +8,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db, plans
+from .. import db, plans, zernio
+from ..config import get_settings
 from ..tenancy import current_tenant_id
 
 router = APIRouter(prefix="/channels")
@@ -23,7 +24,7 @@ def _out(c: dict) -> dict:
         "id": c["id"], "type": c["type"], "mode": c["mode"], "status": c["status"],
         "display_name": c.get("display_name"), "widget_key": c.get("widget_key"),
         "color": cfg.get("color", DEFAULT_COLOR), "position": cfg.get("position", "right"),
-        "created_at": c.get("created_at"),
+        "created_at": c.get("created_at"), "updated_at": c.get("updated_at"),
     }
 
 
@@ -35,7 +36,8 @@ def _active(rows: list[dict]) -> list[dict]:
 def list_channels(tenant_id: str = Depends(current_tenant_id)):
     rows = db.select("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}", "order": "created_at.asc"})
     max_channels = int(plans.limits(tenant_id).get("max_channels") or 1)
-    return {"channels": [_out(c) for c in rows], "max_channels": max_channels, "used": len(_active(rows))}
+    return {"channels": [_out(c) for c in rows], "max_channels": max_channels, "used": len(_active(rows)),
+            "messaging_ready": zernio.configured()}
 
 
 @router.post("/widget")
@@ -87,6 +89,8 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
         if body.position is not None:
             cfg["position"] = body.position
         values["config"] = cfg
+    if body.enabled is not None and ch["type"] != "widget":
+        raise HTTPException(422, "Use Connect / Disconnect for this channel")
     if body.enabled is not None:
         if body.enabled and ch["status"] == "disconnected":
             rows = db.select("channels", {"select": "id,status", "tenant_id": f"eq.{tenant_id}"})
@@ -97,4 +101,101 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
         elif not body.enabled:
             values["status"] = "disconnected"
     changed = db.update("channels", {"id": f"eq.{channel_id}", "tenant_id": f"eq.{tenant_id}"}, values)
+    return _out(changed[0])
+
+
+# ── WhatsApp and Instagram (Zernio)
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _display_name(platform: str, account: dict) -> str:
+    name = account.get("username") or account.get("displayName") or ""
+    if platform == "instagram" and name and not name.startswith("@"):
+        name = "@" + name
+    return name[:120]
+
+
+def upsert_messaging_channel(tenant_id: str, platform: str, account: dict) -> dict:
+    """Save (or refresh) the business's WhatsApp / Instagram channel after a
+    successful connect. Used by the connect callback and the account.connected
+    webhook, whichever arrives first."""
+    account_id = account.get("accountId") or account.get("_id") or account.get("id")
+    existing = db.select_one("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}", "type": f"eq.{platform}",
+                                          "order": "created_at.desc", "limit": "1"})
+    values = {"external_account_id": account_id, "display_name": _display_name(platform, account),
+              "status": "connected", "updated_at": _now()}
+    if existing:
+        return db.update("channels", {"id": f"eq.{existing['id']}"}, values)[0]
+    return db.insert("channels", {"tenant_id": tenant_id, "type": platform, "mode": "auto", **values})[0]
+
+
+class ConnectRequest(BaseModel):
+    # WhatsApp only: keep using the number in the WhatsApp Business app.
+    whatsapp_app: bool = True
+
+
+@router.post("/{platform}/connect")
+def connect(platform: Literal["whatsapp", "instagram"], body: ConnectRequest,
+            tenant_id: str = Depends(current_tenant_id)):
+    """Start the one-click connect: returns the link to open (Meta's own
+    WhatsApp signup or Instagram login, run through Zernio)."""
+    if not zernio.configured():
+        raise HTTPException(503, detail={"code": "not_configured"})
+    rows = db.select("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}"})
+    mine = next((c for c in rows if c["type"] == platform and c["status"] != "disconnected"), None)
+    if mine and mine["status"] == "connected":
+        raise HTTPException(409, detail={"code": "already_connected"})
+    if not mine:   # reconnecting a broken channel doesn't need a free slot
+        max_channels = int(plans.limits(tenant_id).get("max_channels") or 1)
+        if len(_active(rows)) >= max_channels:
+            raise HTTPException(422, detail={"code": "channel_limit", "limit": max_channels})
+    try:
+        profile_id = zernio.ensure_profile(tenant_id)
+        url = zernio.connect_url(
+            platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
+            whatsapp_app=body.whatsapp_app,
+            reconnect_account_id=(mine or {}).get("external_account_id") if platform == "instagram" else None)
+    except zernio.ZernioError as e:
+        print(f"[channels] connect {platform} failed: {e.status} {e.message}")
+        raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    return {"url": url}
+
+
+class CompleteRequest(BaseModel):
+    account_id: str = Field(max_length=100)
+    profile_id: str = Field(max_length=100)
+
+
+@router.post("/{platform}/complete")
+def complete(platform: Literal["whatsapp", "instagram"], body: CompleteRequest,
+             tenant_id: str = Depends(current_tenant_id)):
+    """The browser came back from the connect flow. Check with Zernio that the
+    account really belongs to this business before saving it."""
+    tenant = db.select_one("tenants", {"select": "zernio_profile_id", "id": f"eq.{tenant_id}"}) or {}
+    if not tenant.get("zernio_profile_id") or tenant["zernio_profile_id"] != body.profile_id:
+        raise HTTPException(403, "This account belongs to another business")
+    try:
+        account = zernio.find_account(body.profile_id, body.account_id)
+    except zernio.ZernioError as e:
+        raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    if not account or (account.get("platform") or platform) != platform:
+        raise HTTPException(404, "Account not found")
+    return _out(upsert_messaging_channel(tenant_id, platform, account))
+
+
+@router.post("/{channel_id}/disconnect")
+def disconnect(channel_id: str, tenant_id: str = Depends(current_tenant_id)):
+    """Disconnect WhatsApp / Instagram: removes it from Zernio too (so it stops
+    costing anything) and keeps the conversations."""
+    ch = db.select_one("channels", {"select": "*", "id": f"eq.{channel_id}", "tenant_id": f"eq.{tenant_id}"})
+    if ch is None:
+        raise HTTPException(404, "Channel not found")
+    if ch["type"] in zernio.PLATFORMS and ch.get("external_account_id"):
+        try:
+            zernio.delete_account(ch["external_account_id"])
+        except zernio.ZernioError as e:
+            raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    changed = db.update("channels", {"id": f"eq.{channel_id}"}, {"status": "disconnected", "updated_at": _now()})
     return _out(changed[0])

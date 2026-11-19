@@ -33,6 +33,10 @@ def get_or_create_thread(channel: dict, contact: dict, external_thread_id: str |
     params = {"select": "*", "channel_id": f"eq.{channel['id']}", "contact_id": f"eq.{contact['id']}"}
     thread = db.select_one("threads", params)
     if thread:
+        if external_thread_id and thread.get("external_thread_id") != external_thread_id:
+            # Replies go to this conversation id (e.g. Zernio's), so keep it current.
+            db.update("threads", {"id": f"eq.{thread['id']}"}, {"external_thread_id": external_thread_id})
+            thread["external_thread_id"] = external_thread_id
         return thread
     row = {"tenant_id": channel["tenant_id"], "channel_id": channel["id"], "contact_id": contact["id"]}
     if external_thread_id:
@@ -48,14 +52,16 @@ def receive_message(
     *,
     contact_name: str | None = None,
     contact_email: str | None = None,
+    contact_phone: str | None = None,
     attachment_url: str | None = None,
     attachment_mime: str | None = None,
     external_message_id: str | None = None,
     external_thread_id: str | None = None,
+    auto_reply: bool = True,
 ) -> dict[str, Any]:
     """Store a customer's message and, if the agent should answer, queue it.
     `channel` is a row of the channels table. Returns ids for the caller."""
-    contact = get_or_create_contact(channel, external_contact_id, contact_name, contact_email)
+    contact = get_or_create_contact(channel, external_contact_id, contact_name, contact_email, contact_phone)
     thread = get_or_create_thread(channel, contact, external_thread_id)
 
     msg = db.insert("messages", {
@@ -63,7 +69,7 @@ def receive_message(
         "content": (text or "")[:8000], "attachment_url": attachment_url,
         "attachment_mime": attachment_mime, "external_id": external_message_id,
     })[0]
-    preview = (text or "").strip()[:140] or "[attachment]"
+    preview = (text or "").strip()[:140] or ("📷" if (attachment_mime or "").startswith("image/") else "[attachment]")
     db.update("threads", {"id": f"eq.{thread['id']}"},
               {"unread": True, "last_message_at": _now(), "last_message_preview": preview})
 
@@ -83,7 +89,7 @@ def receive_message(
         alerts.queue_alert(channel["tenant_id"], thread["id"], "customer_message")
 
     job_id = None
-    if channel.get("mode") == "auto" and thread.get("status") == "bot":
+    if auto_reply and channel.get("mode") == "auto" and thread.get("status") == "bot":
         epoch = db.rpc("bump_reply_epoch", {"p_thread": thread["id"]})
         job_id = jobs.enqueue("reply", channel["tenant_id"],
                               {"thread_id": thread["id"], "epoch": epoch},

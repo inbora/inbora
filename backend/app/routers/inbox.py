@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from .. import channels, db, jobs
+from .. import channels, db, jobs, media
 from ..agent import context, history
 from ..agent import loop as agent_loop
 from ..agent.gemini import AgentUnavailable
@@ -77,7 +77,7 @@ def get_thread(thread_id: str, after: int | None = None, mark_read: bool = True,
     """The conversation with its messages. With `after`, only newer messages
     (used for polling an open conversation)."""
     t = _thread(tenant_id, thread_id)
-    params = {"select": "id,role,content,attachment_url,attachment_mime,author_id,created_at",
+    params = {"select": "id,role,content,attachment_url,attachment_mime,author_id,delivery_error,created_at",
               "thread_id": f"eq.{thread_id}"}
     if after is not None:
         params.update({"id": f"gt.{after}", "order": "id.asc"})
@@ -113,8 +113,14 @@ def set_read(thread_id: str, body: ReadState, tenant_id: str = Depends(current_t
     return {"ok": True}
 
 
+class ReplyImage(BaseModel):
+    base64: str = Field(max_length=7_500_000)     # about 5 MB once decoded
+    mime: str = Field(max_length=40)
+
+
 class Reply(BaseModel):
-    text: str = Field(min_length=1, max_length=4000)
+    text: str = Field(default="", max_length=4000)
+    image: ReplyImage | None = None
 
 
 @router.post("/threads/{thread_id}/reply")
@@ -124,13 +130,21 @@ def reply(thread_id: str, body: Reply, user: CurrentUser = Depends(current_user)
     stays quiet until someone hands it back (or the team goes quiet for an hour)."""
     t = _thread(tenant_id, thread_id)
     text = body.text.strip()
-    if not text:
+    if not text and not body.image:
         raise HTTPException(422, "The reply is empty")
+    image_url = image_mime = None
+    if body.image:
+        try:
+            image_url = media.upload_base64(body.image.base64, body.image.mime, tenant_id, thread_id)
+        except media.MediaError as e:
+            raise HTTPException(422, str(e))
+        image_mime = body.image.mime
     msg = db.insert("messages", {"tenant_id": tenant_id, "thread_id": thread_id, "role": "human",
-                                 "content": text, "author_id": user.id})[0]
+                                 "content": text, "author_id": user.id,
+                                 "attachment_url": image_url, "attachment_mime": image_mime})[0]
     now = _now()
     values = {"status": "escalated", "human_last_at": now, "unread": False,
-              "last_message_at": now, "last_message_preview": text[:140]}
+              "last_message_at": now, "last_message_preview": (text or "📷")[:140]}
     if t["status"] != "escalated":
         values["escalated_at"] = now
         values["escalation_reason"] = "Answered by the team"
@@ -139,13 +153,15 @@ def reply(thread_id: str, body: Reply, user: CurrentUser = Depends(current_user)
 
     channel = db.select_one("channels", {"select": "*", "id": f"eq.{t['channel_id']}"}) or {}
     contact = db.select_one("contacts", {"select": "*", "id": f"eq.{t['contact_id']}"}) or {}
-    delivered = True
     try:
-        channels.deliver(channel, t, contact, text)
+        error = channels.deliver(channel, t, contact, text, image_url=image_url, key=f"msg-{msg['id']}")
     except Exception as e:  # noqa: BLE001 — the reply is saved; say it didn't go out
         print(f"[inbox] delivery failed for {thread_id}: {e}")
-        delivered = False
-    return {"message": {**msg, "author_name": None}, "delivered": delivered}
+        error = "error: Sending failed. Please try again."
+    if error:
+        db.update("messages", {"id": f"eq.{msg['id']}"}, {"delivery_error": error})
+        msg["delivery_error"] = error
+    return {"message": {**msg, "author_name": None}, "delivered": error is None, "error": error}
 
 
 @router.post("/threads/{thread_id}/takeover")

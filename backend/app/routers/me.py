@@ -48,11 +48,14 @@ def me(user: CurrentUser = Depends(current_user)):
         }
 
     profile = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}
+    broken = db.select("channels", {"select": "type,display_name", "tenant_id": f"eq.{tenant['id']}",
+                                    "status": "eq.error"})
     return {
         "user": {"id": user.id, "email": user.email, "is_super_admin": user.is_super_admin,
                  "full_name": profile.get("full_name") or ""},
         "tenant": {**tenant, "role": membership["role"]},
         "plan": plan,
+        "channel_alerts": broken,
     }
 
 

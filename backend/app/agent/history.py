@@ -7,8 +7,12 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def _fetch_image(url: str) -> tuple[bytes, str] | None:
+    headers = {}
+    if "zernio.com" in url:
+        from ..config import get_settings
+        headers["Authorization"] = f"Bearer {get_settings().zernio_api_key}"
     try:
-        res = httpx.get(url, timeout=15, follow_redirects=True)
+        res = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
         mime = res.headers.get("content-type", "").split(";")[0].strip()
         if res.status_code == 200 and mime.startswith("image/") and len(res.content) <= MAX_IMAGE_BYTES:
             return res.content, mime

@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:contact@inbora.ai"
 
+    # WhatsApp and Instagram through Zernio (Step 5)
+    zernio_api_key: str = ""
+    zernio_webhook_secret: str = ""
+    zernio_api_base: str = "https://zernio.com/api/v1"
+
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True
     worker_concurrency: int = 4

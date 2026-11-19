@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
+import MessagingChannelCard from "./MessagingChannelCard";
 
 export type Channel = {
   id: string;
@@ -10,11 +12,12 @@ export type Channel = {
   mode: "auto" | "human";
   status: "pending" | "connected" | "disconnected" | "error";
   widget_key: string | null;
+  display_name: string | null;
   color: string;
   position: "right" | "left";
 };
 
-export type ChannelsData = { channels: Channel[]; max_channels: number; used: number };
+export type ChannelsData = { channels: Channel[]; max_channels: number; used: number; messaging_ready?: boolean };
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
@@ -35,9 +38,47 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
 
   const on = widget?.status === "connected";
   const roomLeft = data.used < data.max_channels;
+  const router = useRouter();
+  const params = useSearchParams();
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const handled = useRef(false);
 
   async function reload() {
     setData(await api<ChannelsData>("/channels"));
+  }
+
+  // Back from WhatsApp signup / Instagram login: save the account (the server
+  // checks with Zernio that it belongs to this business), then clean the URL.
+  useEffect(() => {
+    const platform = params.get("connect");
+    if (handled.current || (platform !== "whatsapp" && platform !== "instagram")) return;
+    handled.current = true;
+    const label = t.inbox.channelNames[platform];
+    const accountId = params.get("accountId");
+    const profileId = params.get("profileId");
+    const error = params.get("error");
+    (async () => {
+      if (accountId && profileId && !error) {
+        try {
+          await api(`/channels/${platform}/complete`, {
+            method: "POST", body: JSON.stringify({ account_id: accountId, profile_id: profileId }),
+          });
+          await reload();
+          setNotice({ ok: true, text: fill(c.connectedOk, { channel: label }) });
+        } catch {
+          setNotice({ ok: false, text: c.connectFailed });
+        }
+      } else if (error) {
+        setNotice({ ok: false, text: error === "connection_cancelled" ? c.connectCancelled
+          : error.includes("already_connected") || error.includes("pinned") ? c.numberTaken : c.connectFailed });
+      }
+      router.replace("/channels", { scroll: false });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  function messagingChannel(platform: "whatsapp" | "instagram") {
+    return data.channels.find((x) => x.type === platform && x.status !== "disconnected") ?? null;
   }
 
   async function turnOn() {
@@ -84,6 +125,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
   return (
     <>
       <p className="hint">{fill(c.usage, { used: data.used, max: data.max_channels })}</p>
+      {notice && <div className={`alert ${notice.ok ? "alert-ok" : "alert-error"}`}>{notice.text}</div>}
 
       <div className="card channel-card">
         <div className="row-between">
@@ -153,14 +195,22 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
         )}
       </div>
 
+      <div className="messaging-grid">
+        {(["whatsapp", "instagram"] as const).map((p) => {
+          const ch = messagingChannel(p);
+          return (
+            <MessagingChannelCard key={`${p}-${ch?.id ?? "none"}-${ch?.status ?? ""}`} platform={p} channel={ch}
+              ready={data.messaging_ready !== false} roomLeft={roomLeft} maxChannels={data.max_channels} onChanged={reload} />
+          );
+        })}
+      </div>
+
       <div className="coming-grid">
-        {([["whatsapp", c.whatsappDesc, 5], ["instagram", c.instagramDesc, 5], ["email", c.emailDesc, 6]] as const).map(([k, desc, step]) => (
-          <div key={k} className="card coming-card">
-            <h2 className="channel-title">{t.inbox.channelNames[k]}</h2>
-            <p className="hint">{desc}</p>
-            <span className="step">{fill(c.comingStep, { n: step })}</span>
-          </div>
-        ))}
+        <div className="card coming-card">
+          <h2 className="channel-title">{t.inbox.channelNames.email}</h2>
+          <p className="hint">{c.emailDesc}</p>
+          <span className="step">{fill(c.comingStep, { n: 6 })}</span>
+        </div>
       </div>
     </>
   );

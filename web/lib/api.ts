@@ -6,6 +6,7 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").rep
 export type Me = {
   user: { id: string; email: string; is_super_admin: boolean; full_name: string };
   tenant: { id: string; name: string; slug: string; default_language: string; status: string; role: string };
+  channel_alerts?: { type: "whatsapp" | "instagram" | "email" | "widget"; display_name: string | null }[];
   plan: {
     code: string;
     name: string;

@@ -35,6 +35,11 @@ services:
         sync: false
       - key: VAPID_PRIVATE_KEY
         sync: false
+      # WhatsApp and Instagram (Step 5)
+      - key: ZERNIO_API_KEY
+        sync: false
+      - key: ZERNIO_WEBHOOK_SECRET
+        sync: false
       # The background worker runs inside this service (Step 2).
       - key: EMBEDDED_WORKER
         value: "true"

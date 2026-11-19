@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import ChannelsManager, { type ChannelsData } from "@/components/ChannelsManager";
 import { apiGet } from "@/lib/api";
 import { getI18n } from "@/lib/i18n/server";
@@ -10,7 +11,11 @@ export default async function ChannelsPage() {
     <>
       <h1>{t.nav.channels}</h1>
       <p className="hint">{t.panel.channelsIntro}</p>
-      {data && <ChannelsManager initial={data} branding={me?.plan?.show_branding ?? true} />}
+      {data && (
+        <Suspense>
+          <ChannelsManager initial={data} branding={me?.plan?.show_branding ?? true} />
+        </Suspense>
+      )}
     </>
   );
 }

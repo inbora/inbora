@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, worker_loop
 from .config import get_settings
-from .routers import admin, agent, channels, inbox, knowledge, me, push, widget
+from .routers import admin, agent, channels, inbox, knowledge, me, push, widget, zernio_webhook
 
 settings = get_settings()
 
@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.4.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.5.0", lifespan=lifespan)
 
 
 class SplitCORS:
@@ -48,6 +48,8 @@ def health():
         "status": "ok",
         "database": "ok" if ok else "unreachable",
         "agent": "ok" if settings.gemini_api_key else "missing GEMINI_API_KEY",
+        "whatsapp_instagram": "ok" if (settings.zernio_api_key and settings.zernio_webhook_secret)
+                              else "missing ZERNIO_API_KEY / ZERNIO_WEBHOOK_SECRET",
     }
     if not ok:
         out["reason"] = reason
@@ -62,3 +64,4 @@ app.include_router(channels.router)
 app.include_router(inbox.router)
 app.include_router(push.router)
 app.include_router(widget.router)
+app.include_router(zernio_webhook.router)

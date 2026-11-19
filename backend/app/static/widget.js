@@ -115,6 +115,7 @@
       ".m.bot,.m.human{align-self:flex-start;background:#fff;border:1px solid #e3e6ea;border-end-start-radius:4px}" +
       ".m.human{border-color:" + color + "}" +
       ".m .tag{display:block;font-size:11px;font-weight:700;color:" + color + ";margin-bottom:2px}" +
+      ".m .img{display:block;max-width:100%;max-height:220px;border-radius:8px;margin:2px 0 4px}" +
       ".m a{color:inherit;text-decoration:underline}.m .time{display:block;font-size:10px;opacity:.55;margin-top:3px}" +
       ".sep{align-self:center;background:#e7e9ed;color:#5d6470;font-size:11px;padding:2px 10px;border-radius:10px;margin:4px 0}" +
       ".typing{align-self:flex-start;background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:12px 14px;display:none;gap:4px}" +
@@ -159,7 +160,7 @@
     function clock(ts) {
       try { return new Date(ts).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
     }
-    function add(role, text, ts, id) {
+    function add(role, text, ts, id, img) {
       if (id) { if (shown[id]) return; shown[id] = 1; if (id > lastId) lastId = id; }
       ts = ts || new Date().toISOString();
       if (dayKey(ts) !== lastDay) {
@@ -171,6 +172,7 @@
       d.className = "m " + (role === "user" ? "user" : role === "human" ? "human" : "bot");
       var html = "";
       if (role === "human") html += '<span class="tag">' + esc(t.team + " · " + (cfg.name || "")) + "</span>";
+      if (img && /^https:\/\//.test(img)) html += '<a href="' + esc(img) + '" target="_blank" rel="noopener"><img class="img" src="' + esc(img) + '" alt=""></a>';
       html += '<span dir="auto" style="display:block">' + linkify(text || "") + '</span><span class="time">' + esc(clock(ts)) + "</span>";
       d.innerHTML = html;
       list.insertBefore(d, typing);
@@ -189,7 +191,11 @@
     function apply(data) {
       var fresh = false;
       (data.messages || []).forEach(function (m) {
-        if (!shown[m.id]) { add(m.role, m.content, m.created_at, m.id); if (m.role !== "user") fresh = true; }
+        if (!shown[m.id]) {
+          var img = (m.attachment_mime || "").indexOf("image/") === 0 ? m.attachment_url : null;
+          add(m.role, m.content, m.created_at, m.id, img);
+          if (m.role !== "user") fresh = true;
+        }
       });
       if (fresh) waiting = false;
       setTyping(data.typing || waiting);

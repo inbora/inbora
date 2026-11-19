@@ -179,6 +179,49 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
   team, the agent asks for their email, phone, either, or nothing (the team
   then answers in the chat). On WhatsApp, Instagram and email it never asks.
 
+## Step 5 — WhatsApp and Instagram (Zernio)
+
+**Setup:**
+1. Supabase → SQL Editor → run `supabase/migrations/0005_messaging_channels.sql`
+   (also creates the `inbora-media` storage bucket for images).
+2. A Zernio account **for Inbora only** (not Grinta's): its webhook receives
+   every message of every account in it. Add a payment method there before
+   more than 2 accounts are connected.
+3. Zernio → Webhooks → new webhook: URL `https://<API address>/zernio/webhook`,
+   events `message.received`, `message.sent`, `account.connected`,
+   `account.disconnected`, and a secret of your choice.
+4. Render → inbora-api → Environment: `ZERNIO_API_KEY`, `ZERNIO_WEBHOOK_SECRET`
+   (the same secret), and `APP_URL` = the panel's address (connect flows return there).
+   `/health` shows `"whatsapp_instagram": "ok"` when both are set.
+
+- **Connect (Channels page):** one click opens Meta's own WhatsApp signup or
+  the Instagram login, through Zernio. Each business gets its own Zernio
+  profile the first time it connects (`externalId` = tenant id). The browser
+  comes back to `/channels?connect=…`; the API checks with Zernio that the
+  account belongs to that business before saving it (the `account.connected`
+  webhook saves it too, whichever comes first).
+  - WhatsApp: by default the number keeps working in the WhatsApp Business app
+    (Meta "coexistence"; open the app at least every 14 days). Or a number used
+    only through Inbora.
+  - Instagram: Instagram professional account, no Facebook Page needed.
+- **Messages:** `message.received` → stored and answered like the website chat
+  (same agent, same inbox, takeover, AI draft). Webhooks are verified
+  (HMAC `X-Zernio-Signature`) and de-duplicated (`processed_events`).
+- **Replies from the phone:** `message.sent` from the WhatsApp Business app or
+  Zernio's inbox is stored as a team message and the team takes over. Our own
+  sends (`sentVia: api`) and echoes are skipped. An automatic greeting / away
+  message (within 4 seconds of the customer's message) doesn't take over.
+- **Sending:** agent and team replies go out through Zernio. Images: WhatsApp
+  sends text as the caption; Instagram sends the image and the text separately.
+  If WhatsApp/Instagram refuses (24-hour window closed, account disconnected),
+  the reason is saved on the message and shown in the inbox.
+- **Images:** customer images are copied to Supabase Storage (WhatsApp media
+  links need our key, Instagram links expire), shown in the inbox and given to
+  the agent. Team members can attach an image to a reply (up to 5 MB).
+- **Disconnected:** `account.disconnected` marks the channel; every team member
+  gets an email and a push, again after 24 hours if still disconnected, and every
+  panel page shows a banner with a Reconnect link.
+
 ---
 
 ## Run locally

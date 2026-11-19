@@ -165,7 +165,7 @@ def get_messages(key: str, visitor_id: str = Query(max_length=60), after: int = 
     contact, thread = _contact_thread(w["channel"], visitor_id)
     if not thread:
         return {"messages": [], "typing": False, "team": False}
-    params = {"select": "id,role,content,created_at", "thread_id": f"eq.{thread['id']}",
+    params = {"select": "id,role,content,attachment_url,attachment_mime,created_at", "thread_id": f"eq.{thread['id']}",
               "role": "in.(user,assistant,human)"}
     if after:
         params.update({"id": f"gt.{after}", "order": "id.asc", "limit": "100"})

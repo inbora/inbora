@@ -21,6 +21,10 @@ TEXTS = {
         "failed": "The assistant couldn't answer a conversation",
         "open": "Open in Inbora",
         "visitor": "Website visitor",
+        "ch_down": "Your {channel} is disconnected",
+        "ch_down_body": "Reconnect it so customers' messages reach Inbora again. Until then, the agent can't answer them.",
+        "ch_reconnect": "Reconnect",
+        "ch_still_down": "Still disconnected: your {channel}",
         "from": "From",
         "reason": "Reason",
         "channel": {"widget": "Website chat", "whatsapp": "WhatsApp", "instagram": "Instagram", "email": "Email"},
@@ -32,6 +36,10 @@ TEXTS = {
         "failed": "הסוכן לא הצליח לענות בשיחה",
         "open": "פתיחה ב-Inbora",
         "visitor": "מבקר באתר",
+        "ch_down": "ה{channel} שלכם מנותק",
+        "ch_down_body": "חברו אותו מחדש כדי שהודעות הלקוחות יגיעו שוב ל-Inbora. עד אז הסוכן לא יכול לענות להן.",
+        "ch_reconnect": "חיבור מחדש",
+        "ch_still_down": "עדיין מנותק: ה{channel} שלכם",
         "from": "מאת",
         "reason": "סיבה",
         "channel": {"widget": "צ׳אט באתר", "whatsapp": "וואטסאפ", "instagram": "אינסטגרם", "email": "מייל"},
@@ -43,6 +51,10 @@ TEXTS = {
         "failed": "لم يتمكن الوكيل من الرد على محادثة",
         "open": "فتح في Inbora",
         "visitor": "زائر الموقع",
+        "ch_down": "{channel} الخاص بك غير متصل",
+        "ch_down_body": "أعد ربطه حتى تصل رسائل العملاء إلى Inbora مرة أخرى. حتى ذلك الحين لا يستطيع الوكيل الرد عليها.",
+        "ch_reconnect": "إعادة الربط",
+        "ch_still_down": "ما زال غير متصل: {channel}",
         "from": "من",
         "reason": "السبب",
         "channel": {"widget": "دردشة الموقع", "whatsapp": "واتساب", "instagram": "إنستغرام", "email": "البريد"},
@@ -157,4 +169,46 @@ def handle_alert(payload: dict) -> str:
 
     _send_email([p["email"] for p in people if p.get("email")], f"{title} — {who}", body_html)
     pushed = _send_push([p["id"] for p in people], title, f"{who}: {preview}"[:180], url)
+    return f"alerted {len(people)} people ({pushed} push)"
+
+
+# ── A WhatsApp / Instagram account disconnected
+
+REMINDER_HOURS = 24
+
+
+def queue_channel_alert(tenant_id: str, channel_id: str, reminder: bool = False) -> None:
+    try:
+        jobs.enqueue("channel_alert", tenant_id, {"channel_id": channel_id, "reminder": reminder},
+                     delay_seconds=REMINDER_HOURS * 3600 if reminder else 0)
+    except Exception as e:  # noqa: BLE001
+        print(f"[alerts] could not queue channel alert for {channel_id}: {e}")
+
+
+def handle_channel_alert(payload: dict) -> str:
+    ch = db.select_one("channels", {"select": "*", "id": f"eq.{payload['channel_id']}"})
+    if ch is None or ch["status"] != "error":
+        return "reconnected"                     # fixed meanwhile: nothing to say
+    tenant = db.select_one("tenants", {"select": "name,default_language", "id": f"eq.{ch['tenant_id']}"}) or {}
+    people = _recipients(ch["tenant_id"])
+    if not people:
+        return "no-recipients"
+    lang = tenant.get("default_language") or "en"
+    t = TEXTS.get(lang, TEXTS["en"])
+    channel_name = t["channel"].get(ch["type"], ch["type"])
+    title = (t["ch_still_down"] if payload.get("reminder") else t["ch_down"]).format(channel=channel_name)
+    if ch.get("display_name"):
+        title = f"{title} ({ch['display_name']})"
+    url = f"{get_settings().app_url.rstrip('/')}/channels"
+    direction = "rtl" if lang in ("he", "ar") else "ltr"
+    e = html.escape
+    body_html = f"""<div dir="{direction}" style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#14161a">
+<h2 style="font-size:18px;margin:0 0 12px;color:#c0352b">{e(title)}</h2>
+<p style="margin:0 0 14px">{e(t['ch_down_body'])}</p>
+<p><a href="{e(url)}" style="display:inline-block;background:#0e9f6e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">{e(t['ch_reconnect'])}</a></p>
+<p style="color:#5d6470;font-size:12px">{e(t['footer'].format(business=tenant.get('name', '')))}</p></div>"""
+    _send_email([p["email"] for p in people if p.get("email")], title, body_html)
+    pushed = _send_push([p["id"] for p in people], title, t["ch_down_body"][:180], url)
+    if not payload.get("reminder"):
+        queue_channel_alert(ch["tenant_id"], ch["id"], reminder=True)
     return f"alerted {len(people)} people ({pushed} push)"

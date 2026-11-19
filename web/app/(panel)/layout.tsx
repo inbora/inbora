@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
@@ -29,6 +30,13 @@ export default async function PanelLayout({ children }: { children: React.ReactN
         </header>
         <main className="content">
           {!me && <div className="alert alert-warn">{t.panel.apiDown}</div>}
+          {!!me?.channel_alerts?.length && (
+            <div className="alert alert-error channel-alert">
+              {t.panel.channelAlert.replace("{channels}", me.channel_alerts
+                .map((c) => `${t.inbox.channelNames[c.type]}${c.display_name ? ` (${c.display_name})` : ""}`).join(", "))}{" "}
+              <Link href="/channels">{t.panel.channelAlertLink} →</Link>
+            </div>
+          )}
           {children}
         </main>
       </div>

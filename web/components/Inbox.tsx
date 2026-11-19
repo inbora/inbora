@@ -29,7 +29,19 @@ type Message = {
   content: string;
   created_at: string;
   author_name: string | null;
+  attachment_url?: string | null;
+  attachment_mime?: string | null;
+  delivery_error?: string | null;
 };
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** "window_closed: …" → the team-facing explanation in the panel language. */
+function deliveryText(err: string, ti: { errWindow: string; errDisconnected: string; errOther: string }) {
+  if (err.startsWith("window_closed:")) return ti.errWindow;
+  if (err.startsWith("disconnected:")) return ti.errDisconnected;
+  return `${ti.errOther}: ${err.replace(/^error:\s*/, "")}`;
+}
 
 type Detail = {
   thread: ThreadRow & { channel_id: string };
@@ -264,6 +276,20 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
   const [draftOpen, setDraftOpen] = useDraftOpen();
   const [direction, setDirection] = useState("");
   const [undoText, setUndoText] = useState<string | null>(null);   // what the box held before the last draft
+  const [image, setImage] = useState<{ base64: string; mime: string; preview: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function pickImage(file: File | undefined) {
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) { setError(ti.imageTooBig); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      setImage({ base64: url.split(",")[1] ?? "", mime: file.type || "image/jpeg", preview: url });
+      setError("");
+    };
+    reader.readAsDataURL(file);
+  }
   const logRef = useRef<HTMLDivElement>(null);
   const lastId = useRef(0);
   const stick = useRef(true);
@@ -338,17 +364,19 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
 
   async function send() {
     const body = text.trim();
-    if (!body || busy) return;
+    if ((!body && !image) || busy) return;
     setBusy("send");
     setError("");
     try {
-      const r = await api<{ message: Message; delivered: boolean }>(`/inbox/threads/${id}/reply`, {
-        method: "POST", body: JSON.stringify({ text: body }),
+      const r = await api<{ message: Message; delivered: boolean; error: string | null }>(`/inbox/threads/${id}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ text: body, image: image ? { base64: image.base64, mime: image.mime } : null }),
       });
       setText("");
       setUndoText(null);
       setDirection("");
-      if (!r.delivered) setError(ti.notDelivered);
+      setImage(null);
+      // A delivery problem is shown on the message itself.
       const d = await api<Detail>(`/inbox/threads/${id}`);
       setData(d);
       lastId.current = d.messages.at(-1)?.id ?? lastId.current;
@@ -429,7 +457,14 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
           return [sep, (
             <div key={m.id} className={`msg msg-${m.role}`}>
               <div className="msg-who">{who}</div>
-              <div className="msg-text" dir="auto">{m.content}</div>
+              {m.attachment_url && (m.attachment_mime ?? "").startsWith("image/") && (
+                <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="msg-image">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.attachment_url} alt="" loading="lazy" />
+                </a>
+              )}
+              {m.content && <div className="msg-text" dir="auto">{m.content}</div>}
+              {m.delivery_error && <div className="msg-error">{deliveryText(m.delivery_error, ti)}</div>}
               <div className="msg-time">{new Date(m.created_at).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" })}</div>
             </div>
           )];
@@ -453,12 +488,26 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
             </div>
           </div>
         )}
+        {image && (
+          <div className="attach-preview">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image.preview} alt="" />
+            <button className="icon-btn" aria-label="×" onClick={() => setImage(null)}>×</button>
+          </div>
+        )}
         <textarea dir={text ? "auto" : undefined} rows={3} maxLength={4000} placeholder={ti.replyPlaceholder} value={text}
           onChange={(e) => { setText(e.target.value); setUndoText(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
           }} />
         <div className="composer-foot">
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
+            onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }} />
+          <button className="icon-btn attach-btn" title={ti.attach} aria-label={ti.attach} onClick={() => fileRef.current?.click()}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" />
+            </svg>
+          </button>
           {draftOpen === false && (
             <button className="link-btn" onClick={() => setDraftOpen(true)}>✦ {ti.showDraft}</button>
           )}
@@ -466,7 +515,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
             <span className="undo">{ti.draftReplaced} · <button className="link-btn" onClick={() => { setText(undoText); setUndoText(null); }}>{ti.undo}</button></span>
           )}
           <span className="hint composer-hint">{error ? <span className="error-text">{error}</span> : !team && undoText === null && ti.replyTakesOver}</span>
-          <button className="btn btn-sm" disabled={!text.trim() || !!busy} onClick={send}>{ti.send}</button>
+          <button className="btn btn-sm" disabled={(!text.trim() && !image) || !!busy} onClick={send}>{ti.send}</button>
         </div>
       </div>
     </div>
