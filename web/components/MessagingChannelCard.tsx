@@ -97,7 +97,6 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
                   {app ? c.waAppOption : c.waApiOption}
                 </label>
               ))}
-              {useApp && <span className="hint">{c.waAppNote}</span>}
             </div>
           )}
           {platform === "instagram" && <p className="hint">{c.igNote}</p>}
