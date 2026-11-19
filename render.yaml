@@ -1,0 +1,62 @@
+# Render Blueprint — creates the Inbora services from this repo.
+# Render dashboard → New → Blueprint → pick this repo.
+# Values marked `sync: false` are secrets: Render asks you for them.
+
+services:
+  # ── API (FastAPI) ────────────────────────────────────────────────
+  - type: web
+    name: inbora-api
+    runtime: python
+    region: frankfurt
+    plan: free            # switch to "starter" before beta (free instances sleep)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: WEB_URL
+        value: https://app.inbora.ai
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ── Web panel (Next.js) ──────────────────────────────────────────
+  - type: web
+    name: inbora-web
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.inbora.ai
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://app.inbora.ai
+
+  # ── Worker — added in Step 2 (background workers have no free plan) ──
+  # - type: worker
+  #   name: inbora-worker
+  #   runtime: python
+  #   region: frankfurt
+  #   plan: starter
+  #   rootDir: backend
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: python worker.py
+  #   envVars: same keys as inbora-api
