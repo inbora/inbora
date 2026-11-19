@@ -30,12 +30,14 @@ def run(
     as_rep: bool = False,
     rep_direction: str | None = None,
     rep_name: str | None = None,
+    rep_text: str | None = None,
 ) -> AgentResult:
     """Answer the last customer message. Raises gemini.AgentUnavailable if no
     model could answer at all (the caller decides whether to retry)."""
     system = build_system_prompt(ctx, channel=channel,
                                  customer_name=guards.plausible_name(customer_name),
-                                 as_rep=as_rep, rep_direction=rep_direction, rep_name=rep_name)
+                                 as_rep=as_rep, rep_direction=rep_direction, rep_name=rep_name,
+                                 rep_text=rep_text)
     tools = None if as_rep else BOT_TOOLS     # a team member's draft never escalates
     history = list(history)
     deadline = time.monotonic() + get_settings().agent_deadline_seconds

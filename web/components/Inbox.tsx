@@ -263,6 +263,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
   const [error, setError] = useState("");
   const [draftOpen, setDraftOpen] = useDraftOpen();
   const [direction, setDirection] = useState("");
+  const [undoText, setUndoText] = useState<string | null>(null);   // what the box held before the last draft
   const logRef = useRef<HTMLDivElement>(null);
   const lastId = useRef(0);
   const stick = useRef(true);
@@ -345,6 +346,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
         method: "POST", body: JSON.stringify({ text: body }),
       });
       setText("");
+      setUndoText(null);
       setDirection("");
       if (!r.delivered) setError(ti.notDelivered);
       const d = await api<Detail>(`/inbox/threads/${id}`);
@@ -365,8 +367,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
     setError("");
     try {
       const r = await api<{ text: string }>(`/inbox/threads/${id}/draft`, {
-        method: "POST", body: JSON.stringify({ direction: direction.trim() || null }),
+        method: "POST", body: JSON.stringify({ direction: direction.trim() || null, current_text: text.trim() || null }),
       });
+      setUndoText(text);
       setText(r.text);
     } catch {
       setError(ti.draftError);
@@ -451,7 +454,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
           </div>
         )}
         <textarea dir={text ? "auto" : undefined} rows={3} maxLength={4000} placeholder={ti.replyPlaceholder} value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); setUndoText(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
           }} />
@@ -459,7 +462,10 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
           {draftOpen === false && (
             <button className="link-btn" onClick={() => setDraftOpen(true)}>✦ {ti.showDraft}</button>
           )}
-          <span className="hint composer-hint">{error ? <span className="error-text">{error}</span> : !team && ti.replyTakesOver}</span>
+          {undoText !== null && (
+            <span className="undo">{ti.draftReplaced} · <button className="link-btn" onClick={() => { setText(undoText); setUndoText(null); }}>{ti.undo}</button></span>
+          )}
+          <span className="hint composer-hint">{error ? <span className="error-text">{error}</span> : !team && undoText === null && ti.replyTakesOver}</span>
           <button className="btn btn-sm" disabled={!text.trim() || !!busy} onClick={send}>{ti.send}</button>
         </div>
       </div>

@@ -202,6 +202,8 @@ def _draft_rate(tenant_id: str) -> None:
 
 class DraftRequest(BaseModel):
     direction: str | None = Field(default=None, max_length=1000)
+    # Whatever is in the reply box: the model builds on it if it's relevant.
+    current_text: str | None = Field(default=None, max_length=4000)
 
 
 @router.post("/threads/{thread_id}/draft")
@@ -231,7 +233,8 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
         result = agent_loop.run(ctx, convo, toolbox, channel=channel.get("type", "widget"),
                                 customer_name=contact.get("name"), as_rep=True,
                                 rep_direction=(body.direction or "").strip() or None,
-                                rep_name=me.get("full_name"))
+                                rep_name=me.get("full_name"),
+                                rep_text=(body.current_text or "").strip() or None)
     except AgentUnavailable:
         raise HTTPException(503, "The assistant isn't available right now. Try again in a moment.")
     if result.fallback:

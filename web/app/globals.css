@@ -350,3 +350,4 @@ a.btn:hover { text-decoration: none; }
 .name-form input { height: 34px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
   font-size: 14px; background: #fff; color: var(--text); min-width: 0; flex: 1; max-width: 260px; }
 .name-form input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.undo { font-size: 13px; color: var(--muted); white-space: nowrap; }
