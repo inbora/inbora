@@ -17,15 +17,18 @@
     en: { placeholder: "Write a message…", send: "Send", open: "Open chat", close: "Close chat",
           team: "Team", today: "Today", yesterday: "Yesterday", powered: "Powered by",
           error: "The message didn't go through. Please try again.", busy: "You're sending messages too quickly. Please wait a moment.",
-          subtitle: "We're here to help", teamOn: "A team member is with you" },
+          subtitle: "We're here to help", teamOn: "A team member is with you",
+          attach: "Attach a photo", remove: "Remove photo", tooBig: "Photos can be up to 5 MB.", badType: "Only photos (JPG, PNG, WEBP, GIF) can be sent." },
     he: { placeholder: "כתבו הודעה…", send: "שליחה", open: "פתיחת צ׳אט", close: "סגירת הצ׳אט",
           team: "צוות", today: "היום", yesterday: "אתמול", powered: "מופעל על ידי",
           error: "ההודעה לא נשלחה. נסו שוב.", busy: "שלחתם הרבה הודעות ברצף. חכו רגע ונסו שוב.",
-          subtitle: "כאן כדי לעזור", teamOn: "נציג מהצוות איתכם" },
+          subtitle: "כאן כדי לעזור", teamOn: "נציג מהצוות איתכם",
+          attach: "צירוף תמונה", remove: "הסרת התמונה", tooBig: "תמונות עד 5MB.", badType: "אפשר לשלוח רק תמונות (JPG, PNG, WEBP, GIF)." },
     ar: { placeholder: "اكتب رسالة…", send: "إرسال", open: "فتح الدردشة", close: "إغلاق الدردشة",
           team: "الفريق", today: "اليوم", yesterday: "أمس", powered: "مدعوم من",
           error: "لم تُرسل الرسالة. حاول مرة أخرى.", busy: "أرسلت رسائل كثيرة بسرعة. انتظر لحظة من فضلك.",
-          subtitle: "نحن هنا للمساعدة", teamOn: "أحد أعضاء الفريق معك" }
+          subtitle: "نحن هنا للمساعدة", teamOn: "أحد أعضاء الفريق معك",
+          attach: "إرفاق صورة", remove: "إزالة الصورة", tooBig: "الصور حتى 5 ميغابايت.", badType: "يمكن إرسال الصور فقط (JPG وPNG وWEBP وGIF)." }
   };
 
   function store(k, v) {
@@ -124,6 +127,11 @@
       "@keyframes b{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}" +
       ".err{align-self:center;color:#b42318;font-size:12px;text-align:center}" +
       ".bar{display:flex;gap:8px;padding:10px;border-top:1px solid #eceef1;background:#fff;align-items:flex-end}" +
+      ".clip{flex-shrink:0;width:38px;height:42px;border:0;background:none;cursor:pointer;color:#8a919b;display:flex;align-items:center;justify-content:center;border-radius:50%}" +
+      ".clip:hover{color:" + color + "}.clip svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}" +
+      ".pv{display:none;padding:8px 12px 0;background:#fff}.pv.on{display:block}.pv .th{position:relative;display:inline-block}" +
+      ".pv img{max-height:64px;border-radius:8px;border:1px solid #e3e6ea;display:block}" +
+      ".pv .rm{position:absolute;top:-7px;" + (rtl ? "left" : "right") + ":-7px;width:20px;height:20px;border-radius:50%;border:0;background:#14161a;color:#fff;font-size:13px;line-height:1;cursor:pointer}" +
       "textarea{flex:1;min-width:0;resize:none;border:1px solid #d5d9df;border-radius:20px;padding:10px 14px;font-size:16px;line-height:1.35;max-height:120px;outline:none;color:#14161a;background:#fff}" +
       "textarea:focus{border-color:" + color + "}" +
       ".send{flex-shrink:0;width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;background:" + color + ";color:" + textOn(color) + ";display:flex;align-items:center;justify-content:center}" +
@@ -135,7 +143,10 @@
       '<div class="head"><div class="who"><div class="name"></div><div class="sub"></div></div>' +
       '<button class="x" aria-label="' + esc(t.close) + '">&times;</button></div>' +
       '<div class="list" aria-live="polite"><div class="typing"><i></i><i></i><i></i></div></div>' +
-      '<div class="bar"><textarea rows="1" maxlength="2000" placeholder="' + esc(t.placeholder) + '"></textarea>' +
+      '<div class="pv"></div>' +
+      '<div class="bar"><input class="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>' +
+      '<button class="clip" aria-label="' + esc(t.attach) + '" title="' + esc(t.attach) + '"><svg viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>' +
+      '<textarea rows="1" maxlength="2000" placeholder="' + esc(t.placeholder) + '"></textarea>' +
       '<button class="send" aria-label="' + esc(t.send) + '"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg></button></div>' +
       (cfg.branding ? '<div class="brand">' + esc(t.powered) + ' <a href="https://inbora.ai" target="_blank" rel="noopener">Inbora</a></div>' : "") +
       "</div>" +
@@ -172,7 +183,7 @@
       d.className = "m " + (role === "user" ? "user" : role === "human" ? "human" : "bot");
       var html = "";
       if (role === "human") html += '<span class="tag">' + esc(t.team + " · " + (cfg.name || "")) + "</span>";
-      if (img && /^https:\/\//.test(img)) html += '<a href="' + esc(img) + '" target="_blank" rel="noopener"><img class="img" src="' + esc(img) + '" alt=""></a>';
+      if (img && /^(https:\/\/|data:image\/)/.test(img)) html += '<a href="' + esc(img) + '" target="_blank" rel="noopener"><img class="img" src="' + esc(img) + '" alt=""></a>';
       html += '<span dir="auto" style="display:block">' + linkify(text || "") + '</span><span class="time">' + esc(clock(ts)) + "</span>";
       d.innerHTML = html;
       list.insertBefore(d, typing);
@@ -240,13 +251,37 @@
     });
     sendBtn.addEventListener("click", send);
 
+    var fileIn = $(".file"), pv = $(".pv"), photo = null;
+    $(".clip").addEventListener("click", function () { fileIn.click(); });
+    function clearPhoto() { photo = null; pv.innerHTML = ""; pv.classList.remove("on"); }
+    fileIn.addEventListener("change", function () {
+      var f = fileIn.files && fileIn.files[0];
+      fileIn.value = "";
+      if (!f) return;
+      if (!/^image\/(jpeg|png|webp|gif)$/.test(f.type)) { note(t.badType); return; }
+      if (f.size > 5 * 1024 * 1024) { note(t.tooBig); return; }
+      var r = new FileReader();
+      r.onload = function () {
+        var url = String(r.result);
+        photo = { base64: url.split(",")[1] || "", mime: f.type, url: url };
+        pv.innerHTML = '<span class="th"><img alt="" src="' + url + '"><button class="rm" aria-label="' + esc(t.remove) + '">&times;</button></span>';
+        pv.classList.add("on");
+        pv.querySelector(".rm").addEventListener("click", clearPhoto);
+        if (!("ontouchstart" in window)) input.focus();
+      };
+      r.readAsDataURL(f);
+    });
+
     function send() {
       var text = input.value.trim();
-      if (!text || sendBtn.disabled) return;
+      if ((!text && !photo) || sendBtn.disabled) return;
       sendBtn.disabled = true;
-      var bubble = add("user", text);
-      input.value = ""; grow();
-      req("POST", "/messages", { visitor_id: vid, text: text, page: location.href.slice(0, 500) })
+      var sending = photo;
+      var bubble = add("user", text, null, null, sending ? sending.url : null);
+      input.value = ""; grow(); clearPhoto();
+      var body = { visitor_id: vid, text: text, page: location.href.slice(0, 500) };
+      if (sending) body.image = { base64: sending.base64, mime: sending.mime };
+      req("POST", "/messages", body)
         .then(function (r) {
           shown[r.id] = 1; if (r.id > lastId) lastId = r.id;
           if (!started) { started = true; store("inbora_s_" + KEY, "1"); }
@@ -254,6 +289,7 @@
         })
         .catch(function (e) {
           bubble.remove(); input.value = text; grow();
+          if (sending) { photo = sending; pv.innerHTML = '<span class="th"><img alt="" src="' + sending.url + '"><button class="rm" aria-label="' + esc(t.remove) + '">&times;</button></span>'; pv.classList.add("on"); pv.querySelector(".rm").addEventListener("click", clearPhoto); }
           note(e.status === 429 ? t.busy : t.error);
         })
         .then(function () { sendBtn.disabled = false; });

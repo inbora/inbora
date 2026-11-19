@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field, ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from .. import db, inbound, plans
+from .. import db, inbound, media, plans
 from ..agent_defaults import default_for
 
 router = APIRouter(prefix="/widget")
@@ -24,7 +24,7 @@ _VISITOR = re.compile(r"^v_[A-Za-z0-9]{16,48}$")
 _KEY = re.compile(r"^wk_[A-Za-z0-9_-]{8,64}$")
 
 # (limit, seconds) per bucket
-_LIMITS = {"visitor": (12, 60), "ip": (30, 60), "key": (300, 600)}
+_LIMITS = {"visitor": (12, 60), "ip": (30, 60), "key": (300, 600), "image": (10, 600)}
 _hits: dict[str, deque] = defaultdict(deque)
 _lock = threading.Lock()
 
@@ -103,10 +103,16 @@ def config(key: str):
     }
 
 
+class VisitorImage(BaseModel):
+    base64: str = Field(max_length=7_000_000)     # about 5 MB once decoded
+    mime: str = Field(max_length=40)
+
+
 class VisitorMessage(BaseModel):
     visitor_id: str = Field(max_length=60)
-    text: str = Field(min_length=1, max_length=2000)
+    text: str = Field(default="", max_length=2000)
     page: str | None = Field(default=None, max_length=500)
+    image: VisitorImage | None = None
 
 
 def _contact_thread(channel: dict, visitor_id: str) -> tuple[dict | None, dict | None]:
@@ -123,7 +129,7 @@ def _contact_thread(channel: dict, visitor_id: str) -> tuple[dict | None, dict |
 async def post_message(key: str, request: Request):
     # The widget sends JSON as text/plain so browsers skip the CORS preflight.
     raw = await request.body()
-    if len(raw) > 10_000:
+    if len(raw) > 7_100_000:
         raise HTTPException(413, "Message too long")
     try:
         body = VisitorMessage.model_validate_json(raw)
@@ -136,12 +142,23 @@ def _post(key: str, body: VisitorMessage, ip: str) -> dict:
     w = _load(key)
     _check_visitor(body.visitor_id)
     text = body.text.strip()
-    if not text:
+    if not text and not body.image:
         raise HTTPException(422, "Empty message")
     _rate("visitor", body.visitor_id)
     _rate("ip", ip)
     _rate("key", key)
-    res = inbound.receive_message(w["channel"], body.visitor_id, text)
+    image_url = image_mime = None
+    if body.image:
+        _rate("image", body.visitor_id)
+        try:
+            # Stored under the visitor's id: the conversation may not exist yet.
+            image_url = media.upload_base64(body.image.base64, body.image.mime,
+                                            w["channel"]["tenant_id"], body.visitor_id)
+        except media.MediaError as e:
+            raise HTTPException(422, str(e))
+        image_mime = body.image.mime.lower().replace("image/jpg", "image/jpeg")
+    res = inbound.receive_message(w["channel"], body.visitor_id, text,
+                                  attachment_url=image_url, attachment_mime=image_mime)
     msg = db.select_one("messages", {"select": "id,created_at", "id": f"eq.{res['message_id']}"}) or {}
     return {"id": res["message_id"], "created_at": msg.get("created_at"), "will_reply": bool(res["job_id"])}
 

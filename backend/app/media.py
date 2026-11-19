@@ -36,6 +36,18 @@ def public_url(path: str) -> str:
     return f"{get_settings().supabase_base}/storage/v1/object/public/{BUCKET}/{path}"
 
 
+def _looks_like(data: bytes, mime: str) -> bool:
+    if mime == "image/jpeg":
+        return data[:3] == b"\xff\xd8\xff"
+    if mime == "image/png":
+        return data[:8] == b"\x89PNG\r\n\x1a\n"
+    if mime == "image/gif":
+        return data[:4] == b"GIF8"
+    if mime == "image/webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return False
+
+
 def upload(data: bytes, mime: str, tenant_id: str, thread_id: str) -> str:
     """Store an image and return its public URL."""
     mime = (mime or "").split(";")[0].strip().lower()
@@ -45,6 +57,8 @@ def upload(data: bytes, mime: str, tenant_id: str, thread_id: str) -> str:
         raise MediaError("Only JPG, PNG, WEBP or GIF images can be sent")
     if not data or len(data) > MAX_BYTES:
         raise MediaError("Images can be up to 5 MB")
+    if not _looks_like(data, mime):
+        raise MediaError("The file isn't a valid image")
     path = f"{tenant_id}/{thread_id}/{uuid.uuid4().hex}.{TYPES[mime]}"
     res = client().post(f"/object/{BUCKET}/{path}", content=data,
                         headers={"Content-Type": mime, "x-upsert": "false"})
