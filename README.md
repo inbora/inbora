@@ -128,9 +128,8 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
   agent; switched-off ones are drafts. Templates (shipping, returns, payment,
   contact, opening hours — in English, Hebrew or Arabic) are added switched
   off, because their [brackets] must be filled in first.
-- **Agent page:** instructions, tone, default language, website greeting
-  and the message used when passing a conversation to the team, next to the
-  test chat. Changes apply to the next message right away.
+- **Agent page:** instructions, tone, default language and website
+  greeting, next to the test chat. Changes apply to the next message right away.
 - Articles and settings are changed only through the API
   (`/knowledge`, `/agent/settings`), which enforces the limit; the database
   lets the browser read them but not write them.
@@ -157,8 +156,8 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
   plan has branding. Visitors get a random id kept in the browser. Public
   endpoints are rate-limited (per visitor, per IP, per chat) and accept CORS
   from any site; the rest of the API only from `WEB_URL`.
-- **Inbox:** all conversations, newest first, with filters (needs you /
-  unread / agent handling, channel, date range) and search over names,
+- **Inbox:** all conversations, newest first, with filters (all / needs you, channel,
+  date range) and search over names,
   emails, phones and message text. A conversation shows who wrote each reply.
   - **Reply** — sends as the team; the team now owns the conversation and the
     agent stays quiet. A reply the agent was about to send is dropped.

@@ -21,7 +21,6 @@ class TenantContext:
     instructions: str = ""
     tone: str = "friendly"
     greeting: str | None = None
-    escalation_message: str | None = None
     collect_contact: str = "email"       # what to ask a website visitor for: email|phone|either|none
     articles: list[Article] = field(default_factory=list)
     kb_char_limit: int = 20000
@@ -54,8 +53,6 @@ def load(tenant_id: str) -> TenantContext:
         instructions=(settings.get("instructions") or "").strip(),
         tone=(settings.get("tone") or "friendly").strip(),
         greeting=(settings.get("greeting") or "").strip() or default_for(lang, "greeting"),
-        escalation_message=(settings.get("escalation_message") or "").strip()
-                           or default_for(lang, "escalation_message"),
         collect_contact=settings.get("collect_contact") or "email",
         articles=[Article(r["title"], r["body"] or "") for r in rows],
         kb_char_limit=limit,

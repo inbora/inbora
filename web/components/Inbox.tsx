@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
-type Filter = "all" | "escalated" | "unread" | "bot";
+type Filter = "all" | "escalated";
 type ChannelType = "widget" | "whatsapp" | "instagram" | "email";
 type DateRange = "any" | "1" | "7" | "30" | "custom";
 
@@ -149,12 +149,11 @@ export default function Inbox() {
       <section className="inbox-list">
         <div className="inbox-tools">
           <div className="tabs" role="tablist">
-            {(["all", "escalated", "unread", "bot"] as Filter[]).map((f) => (
+            {(["all", "escalated"] as Filter[]).map((f) => (
               <button key={f} role="tab" aria-selected={filter === f}
                 className={`tab${filter === f ? " tab-on" : ""}`} onClick={() => setFilter(f)}>
                 {ti.filters[f]}
                 {f === "escalated" && counts.escalated > 0 && <span className="count">{counts.escalated}</span>}
-                {f === "unread" && counts.unread > 0 && <span className="count count-soft">{counts.unread}</span>}
               </button>
             ))}
           </div>

@@ -123,11 +123,6 @@ def build_system_prompt(
         rule = (_WIDGET_CONTACT_RULE.get(ctx.collect_contact, _WIDGET_CONTACT_RULE["email"])
                 if channel == "widget" else _CONTACT_RULE.get(channel, _WIDGET_CONTACT_RULE["email"]))
         out.append(_ESCALATION.format(contact_rule=rule))
-        if ctx.escalation_message:
-            out.append(
-                "\nWhen you escalate, base your message to the customer on this text from the "
-                f"business (translate it to the customer's language if needed):\n{ctx.escalation_message}\n"
-            )
 
     out.append(_SAFETY)
 

@@ -5,14 +5,13 @@ import { api } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
 type Lang = "en" | "he" | "ar";
-type Texts = { greeting: string; escalation_message: string };
+type Texts = { greeting: string };
 
 export type AgentSettings = {
   instructions: string;
   tone: "friendly" | "professional" | "casual" | "formal";
   default_language: Lang;
   greeting: string;
-  escalation_message: string;
   collect_contact: "email" | "phone" | "either" | "none";
   defaults: Record<Lang, Texts>;
 };
@@ -31,15 +30,15 @@ export default function AgentSettingsForm({ initial }: { initial: AgentSettings 
     setStatus("");
   };
 
-  // Changing the language swaps the greeting and hand-off message to the new
-  // language's defaults — but only the ones still exactly at the old default
-  // (or empty). Texts the business wrote itself are kept.
+  // Changing the language swaps the greeting to the new language's default,
+  // but only if it's still exactly the old default (or empty). A greeting the
+  // business wrote itself is kept.
   function changeLanguage(next: Lang) {
     const before = form.defaults[form.default_language];
     const after = form.defaults[next];
     const swap = (field: keyof Texts) =>
       !form[field].trim() || form[field].trim() === before[field] ? after[field] : form[field];
-    setForm({ ...form, default_language: next, greeting: swap("greeting"), escalation_message: swap("escalation_message") });
+    setForm({ ...form, default_language: next, greeting: swap("greeting") });
     setStatus("");
   }
 
@@ -88,12 +87,6 @@ export default function AgentSettingsForm({ initial }: { initial: AgentSettings 
         <input id="ag-greet" dir="auto" maxLength={500} value={form.greeting}
           onChange={(e) => set("greeting", e.target.value)} />
         <span className="hint">{s.greetingHint}</span>
-      </div>
-      <div className="field">
-        <label htmlFor="ag-esc">{s.escalation}</label>
-        <textarea id="ag-esc" dir="auto" rows={2} maxLength={1000} value={form.escalation_message}
-          onChange={(e) => set("escalation_message", e.target.value)} />
-        <span className="hint">{s.escalationHint}</span>
       </div>
       <div className="field">
         <label htmlFor="ag-collect">{s.collect}</label>
