@@ -135,6 +135,51 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
   (`/knowledge`, `/agent/settings`), which enforces the limit; the database
   lets the browser read them but not write them.
 
+## Step 4 — website chat, inbox and alerts
+
+**Setup:**
+1. Supabase → SQL Editor → run `supabase/migrations/0004_inbox_widget.sql`.
+2. Render → inbora-api → Environment: add `RESEND_API_KEY` (Resend → API Keys,
+   with inbora.ai verified as a sending domain), `VAPID_PUBLIC_KEY` and
+   `VAPID_PRIVATE_KEY` (one pair for good: `npx web-push generate-vapid-keys`).
+   Optional: `ALERTS_FROM` (default `Inbora <alerts@inbora.ai>`), `APP_URL`
+   (default `https://app.inbora.ai`, used in alert links), `HANDBACK_HOURS`
+   (default 1).
+
+- **Website chat (Channels page):** one per business. Turn it on, copy the
+  one-line snippet into the site, pick a colour and side, and choose who
+  answers (agent with team takeover, or team only). "Open test page" shows the
+  chat on a blank page served by the API (`/widget/<key>/demo`).
+- **Widget** (`backend/app/static/widget.js`, served at `/widget/widget.js`):
+  self-contained, Shadow DOM so the site's CSS can't break it, English /
+  Hebrew / Arabic with right-to-left, polls for replies (every 2–5 s while
+  open), typing dots, team replies labelled, "Powered by Inbora" when the
+  plan has branding. Visitors get a random id kept in the browser. Public
+  endpoints are rate-limited (per visitor, per IP, per chat) and accept CORS
+  from any site; the rest of the API only from `WEB_URL`.
+- **Inbox:** all conversations, newest first, with filters (needs you /
+  unread / agent handling, channel, date range) and search over names,
+  emails, phones and message text. A conversation shows who wrote each reply.
+  - **Reply** — sends as the team; the team now owns the conversation and the
+    agent stays quiet. A reply the agent was about to send is dropped.
+  - **Take over / Hand back** — handing back makes the agent answer the
+    customer's last message if it's still unanswered.
+  - **Auto hand-back** — if the team hasn't written for `HANDBACK_HOURS` and the
+    customer writes again, the agent takes the conversation back.
+  - **AI draft** — the agent writes a reply as the team (with an optional
+    direction, e.g. "offer a 10% coupon"); you edit it and send. Nothing is
+    sent or saved until you press Send.
+- **Alerts:** when a conversation is escalated (by the agent, by a technical
+  failure, or a new message in a team-only chat) every team member gets an
+  email (Resend) and a browser notification (Settings → Notifications → turn
+  on for this device). A customer who keeps writing while the team handles
+  the conversation triggers at most one alert per 10 minutes, until the team
+  replies. Alerts run as background jobs, so a slow email never delays a
+  reply.
+- **Contact details (Agent page):** before passing a website visitor to the
+  team, the agent asks for their email, phone, either, or nothing (the team
+  then answers in the chat). On WhatsApp, Instagram and email it never asks.
+
 ---
 
 ## Run locally

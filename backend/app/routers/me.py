@@ -42,6 +42,7 @@ def me(user: CurrentUser = Depends(current_user)):
             "conversations_used": int((usage or {}).get("conversations_used", 0)),
             "max_channels": limits.get("max_channels"),
             "kb_char_limit": limits.get("kb_char_limit"),
+            "show_branding": bool(limits.get("show_branding", True)),
             "period_end": sub["period_end"],
         }
 

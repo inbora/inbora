@@ -26,6 +26,15 @@ services:
         value: https://app.inbora.ai
       - key: GEMINI_API_KEY
         sync: false
+      # Alerts to the team (Step 4)
+      - key: APP_URL
+        value: https://app.inbora.ai
+      - key: RESEND_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
       # The background worker runs inside this service (Step 2).
       - key: EMBEDDED_WORKER
         value: "true"

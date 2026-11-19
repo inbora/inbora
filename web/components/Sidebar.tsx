@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LanguageSwitcher from "./LanguageSwitcher";
 import Logo from "./Logo";
+import { api } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
 const ICONS: Record<string, string> = {
@@ -30,6 +32,20 @@ const ITEMS = ["inbox", "channels", "knowledge", "agent", "plan", "settings"] as
 export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useI18n();
   const path = usePathname();
+  const [waiting, setWaiting] = useState(0);
+
+  // Conversations waiting for the team, refreshed every 30 seconds.
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      if (document.hidden) return;
+      api<{ escalated: number }>("/inbox/counts").then((c) => !stop && setWaiting(c.escalated)).catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(id); };
+  }, [path]);
+
   const link = (key: keyof typeof t.nav) => {
     const href = `/${key}`;
     const active = path === href || path.startsWith(href + "/");
@@ -37,6 +53,7 @@ export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
       <Link key={key} href={href} className={`side-link${active ? " active" : ""}`}>
         <Icon name={key} />
         {t.nav[key]}
+        {key === "inbox" && waiting > 0 && <span className="side-count">{waiting > 99 ? "99+" : waiting}</span>}
       </Link>
     );
   };

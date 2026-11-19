@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, worker_loop
 from .config import get_settings
-from .routers import admin, agent, knowledge, me
+from .routers import admin, agent, channels, inbox, knowledge, me, push, widget
 
 settings = get_settings()
 
@@ -18,15 +18,26 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.4.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+class SplitCORS:
+    """The website chat (/widget/...) is called from any customer's site; the
+    rest of the API only from the Inbora panel."""
+
+    def __init__(self, app):
+        self.public = CORSMiddleware(app, allow_origins=["*"], allow_methods=["GET", "POST"],
+                                     allow_headers=["Content-Type"], allow_credentials=False)
+        self.panel = CORSMiddleware(app, allow_origins=settings.cors_origins, allow_methods=["*"],
+                                    allow_headers=["*"], allow_credentials=False)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/widget/"):
+            return await self.public(scope, receive, send)
+        return await self.panel(scope, receive, send)
+
+
+app.add_middleware(SplitCORS)
 
 
 @app.get("/health")
@@ -47,3 +58,7 @@ app.include_router(me.router)
 app.include_router(admin.router)
 app.include_router(agent.router)
 app.include_router(knowledge.router)
+app.include_router(channels.router)
+app.include_router(inbox.router)
+app.include_router(push.router)
+app.include_router(widget.router)

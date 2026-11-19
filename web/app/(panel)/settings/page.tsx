@@ -1,4 +1,5 @@
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import NotificationSettings from "@/components/NotificationSettings";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
 
@@ -24,6 +25,7 @@ export default async function SettingsPage() {
           </dd>
         </dl>
       </div>
+      <NotificationSettings email={me?.user.email ?? ""} />
     </>
   );
 }

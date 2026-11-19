@@ -28,6 +28,20 @@ class Settings(BaseSettings):
     # customer gets the "technical problem" message instead.
     agent_deadline_seconds: float = 50
 
+    # A conversation the team took over goes back to the agent when the
+    # customer writes again after this many hours without a team reply.
+    handback_hours: float = 1
+
+    # Links in alerts point here.
+    app_url: str = "https://app.inbora.ai"
+
+    # Alerts to the business's team (Step 4). Each is skipped when not set.
+    resend_api_key: str = ""
+    alerts_from: str = "Inbora <alerts@inbora.ai>"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:contact@inbora.ai"
+
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True
     worker_concurrency: int = 4

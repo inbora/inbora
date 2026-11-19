@@ -13,10 +13,12 @@ export type AgentSettings = {
   default_language: Lang;
   greeting: string;
   escalation_message: string;
+  collect_contact: "email" | "phone" | "either" | "none";
   defaults: Record<Lang, Texts>;
 };
 
 const TONES = ["friendly", "professional", "casual", "formal"] as const;
+const COLLECT = ["email", "phone", "either", "none"] as const;
 
 export default function AgentSettingsForm({ initial }: { initial: AgentSettings }) {
   const { t, lang } = useI18n();
@@ -92,6 +94,14 @@ export default function AgentSettingsForm({ initial }: { initial: AgentSettings 
         <textarea id="ag-esc" dir="auto" rows={2} maxLength={1000} value={form.escalation_message}
           onChange={(e) => set("escalation_message", e.target.value)} />
         <span className="hint">{s.escalationHint}</span>
+      </div>
+      <div className="field">
+        <label htmlFor="ag-collect">{s.collect}</label>
+        <select id="ag-collect" value={form.collect_contact ?? "email"}
+          onChange={(e) => set("collect_contact", e.target.value as AgentSettings["collect_contact"])}>
+          {COLLECT.map((x) => <option key={x} value={x}>{s.collectOptions[x]}</option>)}
+        </select>
+        <span className="hint">{s.collectHint}</span>
       </div>
       <div className="actions">
         {status === "saved" && <span className="saved">{s.saved}</span>}

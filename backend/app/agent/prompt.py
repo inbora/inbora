@@ -40,16 +40,29 @@ _ESCALATION = """
 - After escalating, tell the customer in their language that their request was passed to the team and someone will get back to them. Don't promise a specific time unless the knowledge gives one.
 - Once you have escalated, keep helping with anything you can still answer.
 
-## Contact email
-- Whenever the customer gives their own email address, call collect_contact_email to save it (with their name if you know it). Do it quietly, without announcing it.
-- Never save an email address that is not the customer's own.
+## Contact details
+- Whenever the customer gives their own email address or phone number, call collect_contact to save it (with their name if you know it). Do it quietly, without announcing it.
+- Never save details that are not the customer's own.
 """
 
+_WIDGET_CONTACT_RULE = {
+    "email": ("The website visitor may leave before the team answers, so before escalating "
+              "ask for their email address (and name) if you don't have them yet, save it "
+              "with collect_contact, then escalate. If they don't want to share it, "
+              "escalate anyway."),
+    "phone": ("The website visitor may leave before the team answers, so before escalating "
+              "ask for their phone number (and name) if you don't have them yet, save it "
+              "with collect_contact, then escalate. If they don't want to share it, "
+              "escalate anyway."),
+    "either": ("The website visitor may leave before the team answers, so before escalating "
+               "ask how the team can reach them, by email or phone, whichever they prefer "
+               "(and their name), if you don't have it yet. Save it with collect_contact, then "
+               "escalate. If they don't want to share it, escalate anyway."),
+    "none": ("Don't ask the website visitor for contact details before escalating. Tell them "
+             "the team will answer here in this chat, so they can come back to it later."),
+}
+
 _CONTACT_RULE = {
-    "widget": ("The website visitor may leave before the team answers, so before escalating "
-               "ask for their email address (and name) if you don't have them yet, save it "
-               "with collect_contact_email, then escalate. If they don't want to share it, "
-               "escalate anyway."),
     "whatsapp": ("The team will reply in this same WhatsApp chat, so don't ask for an email "
                  "address before escalating."),
     "instagram": ("The team will reply in this same Instagram chat, so don't ask for an email "
@@ -107,7 +120,9 @@ def build_system_prompt(
     out.append(_knowledge_section(ctx))
 
     if not as_rep:
-        out.append(_ESCALATION.format(contact_rule=_CONTACT_RULE.get(channel, _CONTACT_RULE["widget"])))
+        rule = (_WIDGET_CONTACT_RULE.get(ctx.collect_contact, _WIDGET_CONTACT_RULE["email"])
+                if channel == "widget" else _CONTACT_RULE.get(channel, _WIDGET_CONTACT_RULE["email"]))
+        out.append(_ESCALATION.format(contact_rule=rule))
         if ctx.escalation_message:
             out.append(
                 "\nWhen you escalate, base your message to the customer on this text from the "

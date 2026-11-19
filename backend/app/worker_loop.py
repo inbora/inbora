@@ -8,7 +8,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import channels, db, jobs
+from . import alerts, channels, db, jobs
 from .agent import context, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
@@ -75,13 +75,16 @@ def _on_final_failure(job: dict, error: str) -> None:
     if not tid:
         return
     try:
-        db.update("threads", {"id": f"eq.{tid}", "status": "eq.bot"},
-                  {"status": "escalated", "escalation_reason": "The assistant could not answer (technical error)"})
+        changed = db.update("threads", {"id": f"eq.{tid}", "status": "eq.bot"},
+                            {"status": "escalated", "escalated_at": _now(),
+                             "escalation_reason": "The assistant could not answer (technical error)"})
+        if changed:
+            alerts.queue_alert(changed[0]["tenant_id"], tid, "failed", "technical error")
     except Exception as e:  # noqa: BLE001
         print(f"[worker] could not escalate thread {tid}: {e}")
 
 
-HANDLERS = {"reply": handle_reply}
+HANDLERS = {"reply": handle_reply, "alert": alerts.handle_alert}
 
 
 def process(job: dict) -> None:

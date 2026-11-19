@@ -1,9 +1,10 @@
 """Every incoming customer message — from the widget, WhatsApp, Instagram or
 email — goes through receive_message(): store it, then queue a reply."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import db, jobs
+from . import alerts, db, jobs
+from .config import get_settings
 
 # Customers often send one thought as several quick messages. Waiting a moment
 # lets them land, and "newest message wins" makes sure only one reply goes out.
@@ -66,6 +67,21 @@ def receive_message(
     db.update("threads", {"id": f"eq.{thread['id']}"},
               {"unread": True, "last_message_at": _now(), "last_message_preview": preview})
 
+    if thread.get("status") == "escalated":
+        if _team_went_quiet(thread):
+            # Nobody from the team has written for a while: the agent takes the
+            # conversation back and answers this message.
+            db.update("threads", {"id": f"eq.{thread['id']}"}, {"status": "bot", "escalation_reason": None})
+            db.insert("messages", {"tenant_id": channel["tenant_id"], "thread_id": thread["id"], "role": "system",
+                                   "content": "Handed back to the agent: no team reply for "
+                                              f"{get_settings().handback_hours:g} hour(s)."})
+            thread["status"] = "bot"
+        else:
+            alerts.queue_alert(channel["tenant_id"], thread["id"], "customer_message")
+    elif channel.get("mode") != "auto":
+        # Human-only channel: every new message needs the team.
+        alerts.queue_alert(channel["tenant_id"], thread["id"], "customer_message")
+
     job_id = None
     if channel.get("mode") == "auto" and thread.get("status") == "bot":
         epoch = db.rpc("bump_reply_epoch", {"p_thread": thread["id"]})
@@ -74,3 +90,18 @@ def receive_message(
                               delay_seconds=REPLY_DELAY_SECONDS)
 
     return {"thread_id": thread["id"], "message_id": msg["id"], "contact_id": contact["id"], "job_id": job_id}
+
+
+def _parse(ts) -> datetime | None:
+    if not ts:
+        return None
+    return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+
+
+def _team_went_quiet(thread: dict) -> bool:
+    """True when the team took the conversation (or last wrote in it) more than
+    handback_hours ago."""
+    marks = [t for t in (_parse(thread.get("escalated_at")), _parse(thread.get("human_last_at"))) if t]
+    if not marks:
+        return True
+    return max(marks) < datetime.now(timezone.utc) - timedelta(hours=get_settings().handback_hours)

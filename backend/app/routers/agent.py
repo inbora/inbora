@@ -74,7 +74,7 @@ def test_agent(req: TestRequest, tenant_id: str = Depends(current_tenant_id)):
 
 # ── Agent settings ─────────────────────────────────────────────────────
 
-_SETTINGS = "instructions,tone,default_language,greeting,escalation_message,updated_at"
+_SETTINGS = "instructions,tone,default_language,greeting,escalation_message,collect_contact,updated_at"
 
 
 class SettingsIn(BaseModel):
@@ -83,6 +83,7 @@ class SettingsIn(BaseModel):
     default_language: Literal["en", "he", "ar"] = "en"
     greeting: str = Field(default="", max_length=500)
     escalation_message: str = Field(default="", max_length=1000)
+    collect_contact: Literal["email", "phone", "either", "none"] = "email"
 
 
 @router.get("/settings")
@@ -102,6 +103,7 @@ def put_settings(body: SettingsIn, tenant_id: str = Depends(current_tenant_id)):
         # Empty = use the default text for the language.
         "greeting": body.greeting.strip() or None,
         "escalation_message": body.escalation_message.strip() or None,
+        "collect_contact": body.collect_contact,
     }
     rows = db.update("agent_settings", {"tenant_id": f"eq.{tenant_id}"}, values)
     if not rows:
@@ -120,6 +122,7 @@ def _out(row: dict) -> dict:
         "default_language": lang,
         "greeting": row.get("greeting") or default_for(lang, "greeting"),
         "escalation_message": row.get("escalation_message") or default_for(lang, "escalation_message"),
+        "collect_contact": row.get("collect_contact") or "email",
         "updated_at": row.get("updated_at"),
         "defaults": DEFAULTS,
     }

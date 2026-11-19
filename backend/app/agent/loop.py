@@ -27,11 +27,15 @@ def run(
     toolbox: Toolbox,
     channel: str = "widget",
     customer_name: str | None = None,
+    as_rep: bool = False,
+    rep_direction: str | None = None,
 ) -> AgentResult:
     """Answer the last customer message. Raises gemini.AgentUnavailable if no
     model could answer at all (the caller decides whether to retry)."""
     system = build_system_prompt(ctx, channel=channel,
-                                 customer_name=guards.plausible_name(customer_name))
+                                 customer_name=guards.plausible_name(customer_name),
+                                 as_rep=as_rep, rep_direction=rep_direction)
+    tools = None if as_rep else BOT_TOOLS     # a team member's draft never escalates
     history = list(history)
     deadline = time.monotonic() + get_settings().agent_deadline_seconds
 
@@ -39,7 +43,7 @@ def run(
         if round_no and time.monotonic() > deadline:
             print("[agent] reply deadline passed between tool rounds")
             break
-        resp = gemini.generate(history, system, BOT_TOOLS, deadline=deadline)
+        resp = gemini.generate(history, system, tools, deadline=deadline)
         content = resp.candidates[0].content
         history.append(content)
         parts = content.parts or []
