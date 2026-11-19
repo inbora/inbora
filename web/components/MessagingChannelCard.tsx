@@ -3,19 +3,22 @@
 import { useState } from "react";
 import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
+import ChannelRow from "./ChannelRow";
 import type { Channel } from "./ChannelsManager";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
 /** WhatsApp or Instagram: one-click connect (through Zernio), status,
-    who answers, reconnect and disconnect. */
-export default function MessagingChannelCard({ platform, channel, ready, roomLeft, maxChannels, onChanged }: {
+    who answers, reconnect and disconnect — as a row that opens. */
+export default function MessagingChannelCard({ platform, channel, ready, roomLeft, maxChannels, onChanged, open, onToggle }: {
   platform: "whatsapp" | "instagram";
   channel: Channel | null;
   ready: boolean;
   roomLeft: boolean;
   maxChannels: number;
   onChanged: () => Promise<void>;
+  open: boolean;
+  onToggle: (open?: boolean) => void;
 }) {
   const { t } = useI18n();
   const c = t.channels;
@@ -37,6 +40,7 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
       window.location.href = r.url;       // Meta's own signup / Instagram login
     } catch (e) {
       setStatus(e instanceof ApiError && e.status === 422 ? "limit" : "error");
+      onToggle(true);
       setBusy(false);
     }
   }
@@ -70,20 +74,34 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
     }
   }
 
+  // The one action shown on the closed row.
+  let action: React.ReactNode = null;
+  const connectLabel = busy ? c.connecting : fill(c.connect, { channel: name });
+  if (state === "none") {
+    // WhatsApp first shows its "Business app / other number" choice;
+    // Instagram connects straight away. No room or not ready: open to explain.
+    const direct = platform === "instagram" && ready && roomLeft;
+    action = open && !direct ? null : (
+      <button className="btn btn-row" disabled={busy} onClick={() => (direct ? connect() : onToggle(true))}>
+        {connectLabel}
+      </button>
+    );
+  } else if (state === "error") {
+    action = (
+      <button className="btn btn-row" disabled={busy || !ready} onClick={connect}>
+        {busy ? c.connecting : c.reconnect}
+      </button>
+    );
+  }
+
   return (
-    <div className={`card channel-card channel-${platform}`}>
-      <div className="row-between">
-        <div className="grow">
-          <h2 className="channel-title">
-            <span className={`chan-dot chan-dot-${platform}`} aria-hidden="true" />
-            {name}
-            {state === "connected" && <span className="pill pill-on">{c.on}</span>}
-            {state === "error" && <span className="pill pill-error">{c.errorPill}</span>}
-          </h2>
-          {channel?.display_name && <div className="account-name" dir="ltr">{channel.display_name}</div>}
-          <p className="hint">{platform === "whatsapp" ? c.whatsappDesc : c.instagramDesc}</p>
-        </div>
-      </div>
+    <ChannelRow kind={platform} name={name} className={`channel-${platform}`} open={open} onToggle={() => onToggle()}
+      settingsLabel={state === "connected"}
+      account={channel?.display_name}
+      pill={state === "connected" ? <span className="pill pill-on">{c.on}</span>
+        : state === "error" ? <span className="pill pill-error">{c.errorPill}</span> : null}
+      action={action}>
+      <p className="hint">{platform === "whatsapp" ? c.whatsappDesc : c.instagramDesc}</p>
 
       {!ready && state === "none" && <p className="hint">{c.notReady}</p>}
 
@@ -104,9 +122,7 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
             <div className="alert alert-warn">{fill(c.limitReached, { n: maxChannels })}</div>
           ) : (
             <div className="actions actions-start">
-              <button className="btn btn-auto" disabled={busy} onClick={connect}>
-                {busy ? c.connecting : fill(c.connect, { channel: name })}
-              </button>
+              <button className="btn btn-auto ch-connect" disabled={busy} onClick={connect}>{connectLabel}</button>
             </div>
           )}
         </>
@@ -116,9 +132,6 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
         <>
           <div className="alert alert-error">{c.errorNote}</div>
           <div className="actions actions-start">
-            <button className="btn btn-auto" disabled={busy || !ready} onClick={connect}>
-              {busy ? c.connecting : c.reconnect}
-            </button>
             <button className="link-btn link-danger" disabled={busy} onClick={disconnect}>{c.disconnect}</button>
           </div>
         </>
@@ -145,6 +158,6 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
 
       {status === "limit" && <div className="alert alert-warn">{fill(c.limitReached, { n: maxChannels })}</div>}
       {status === "error" && <p className="error-text">{c.error}</p>}
-    </div>
+    </ChannelRow>
   );
 }

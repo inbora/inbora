@@ -176,6 +176,7 @@ const en = {
     noteAutoHandback: "Handed back to the agent automatically: no team reply for 1 hour.",
   },
   channels: {
+    settings: "Settings",
     connect: "Connect {channel}",
     connecting: "Opening…",
     waAppOption: "My number is on the WhatsApp Business app (recommended). I keep using the app on my phone.",
@@ -449,6 +450,7 @@ const he: Dict = {
     noteAutoHandback: "השיחה הוחזרה לסוכן אוטומטית: הצוות לא ענה שעה.",
   },
   channels: {
+    settings: "הגדרות",
     connect: "חיבור {channel}",
     connecting: "פותח…",
     waAppOption: "המספר שלי באפליקציית WhatsApp Business (מומלץ). אני ממשיך להשתמש באפליקציה בטלפון.",
@@ -720,6 +722,7 @@ const ar: Dict = {
     noteAutoHandback: "أُعيدت المحادثة إلى الوكيل تلقائيًا: لم يرد الفريق لمدة ساعة.",
   },
   channels: {
+    settings: "الإعدادات",
     connect: "ربط {channel}",
     connecting: "جارٍ الفتح…",
     waAppOption: "رقمي على تطبيق WhatsApp Business (موصى به). أواصل استخدام التطبيق على هاتفي.",

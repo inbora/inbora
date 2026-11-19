@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
+import ChannelRow from "./ChannelRow";
 import MessagingChannelCard from "./MessagingChannelCard";
 
 export type Channel = {
@@ -35,6 +36,10 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"" | "saved" | "error" | "limit">("");
   const [copied, setCopied] = useState(false);
+  // Which channel row is open (one at a time; all closed when the page opens).
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const toggle = (key: string, force?: boolean) =>
+    setOpenRow((cur) => (force === true ? key : force === false ? null : cur === key ? null : key));
 
   const on = widget?.status === "connected";
   const roomLeft = data.used < data.max_channels;
@@ -88,6 +93,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
       const w = await api<Channel>("/channels/widget", { method: "POST" });
       setForm({ color: w.color, position: w.position, mode: w.mode });
       await reload();
+      setOpenRow("widget");          // show the snippet right away
     } catch (e) {
       setStatus(e instanceof ApiError && e.status === 422 ? "limit" : "error");
     } finally {
@@ -127,90 +133,80 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
       <p className="hint">{fill(c.usage, { used: data.used, max: data.max_channels })}</p>
       {notice && <div className={`alert ${notice.ok ? "alert-ok" : "alert-error"}`}>{notice.text}</div>}
 
-      <div className="card channel-card">
-        <div className="row-between">
-          <div className="grow">
-            <h2 className="channel-title">
-              {c.widgetTitle}
-              {widget && <span className={`pill ${on ? "pill-on" : "pill-off"}`}>{on ? c.on : c.off}</span>}
-            </h2>
-            <p className="hint">{c.widgetDesc}</p>
-          </div>
-          {!on && (
-            <button className="btn btn-auto" disabled={busy || !roomLeft} onClick={turnOn}>{c.turnOn}</button>
-          )}
-        </div>
-        {!on && !roomLeft && <div className="alert alert-warn">{fill(c.limitReached, { n: data.max_channels })}</div>}
-        {status === "limit" && <div className="alert alert-warn">{fill(c.limitReached, { n: data.max_channels })}</div>}
-        {widget && !on && <p className="hint">{c.offNote}</p>}
+      <div className="ch-list">
+        <ChannelRow kind="widget" name={c.widgetTitle} className="channel-card channel-widget"
+          open={openRow === "widget"} onToggle={() => toggle("widget")} settingsLabel={on}
+          pill={widget ? <span className={`pill ${on ? "pill-on" : "pill-off"}`}>{on ? c.on : c.off}</span> : null}
+          action={!on && roomLeft ? (
+            <button className="btn btn-row" disabled={busy} onClick={turnOn}>{c.turnOn}</button>
+          ) : null}>
+          <p className="hint">{c.widgetDesc}</p>
+          {!on && !roomLeft && <div className="alert alert-warn">{fill(c.limitReached, { n: data.max_channels })}</div>}
+          {status === "limit" && <div className="alert alert-warn">{fill(c.limitReached, { n: data.max_channels })}</div>}
+          {widget && !on && <p className="hint">{c.offNote}</p>}
 
-        {widget && on && (
-          <>
-            <h3 className="sub-title">{c.snippetTitle}</h3>
-            <p className="hint">{c.snippetHint}</p>
-            <pre className="snippet" dir="ltr"><code>{snippet}</code></pre>
-            <div className="actions actions-start">
-              <button className="btn btn-auto" onClick={copy}>{copied ? c.copied : c.copy}</button>
-              <a className="btn btn-secondary btn-auto" href={`${API_URL}/widget/${widget.widget_key}/demo`} target="_blank" rel="noopener">
-                {c.tryIt} ↗
-              </a>
-            </div>
+          {widget && on && (
+            <>
+              <h3 className="sub-title">{c.snippetTitle}</h3>
+              <p className="hint">{c.snippetHint}</p>
+              <pre className="snippet" dir="ltr"><code>{snippet}</code></pre>
+              <div className="actions actions-start">
+                <button className="btn btn-auto" onClick={copy}>{copied ? c.copied : c.copy}</button>
+                <a className="btn btn-secondary btn-auto" href={`${API_URL}/widget/${widget.widget_key}/demo`} target="_blank" rel="noopener">
+                  {c.tryIt} ↗
+                </a>
+              </div>
 
-            <div className="grid-2 channel-settings">
-              <div className="field">
-                <label htmlFor="w-color">{c.color}</label>
-                <div className="color-row">
-                  <input id="w-color" type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
-                  <input dir="ltr" value={form.color} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })} />
+              <div className="grid-2 channel-settings">
+                <div className="field">
+                  <label htmlFor="w-color">{c.color}</label>
+                  <div className="color-row">
+                    <input id="w-color" type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
+                    <input dir="ltr" value={form.color} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label htmlFor="w-pos">{c.position}</label>
+                  <select id="w-pos" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value as "right" | "left" })}>
+                    <option value="right">{c.positions.right}</option>
+                    <option value="left">{c.positions.left}</option>
+                  </select>
                 </div>
               </div>
               <div className="field">
-                <label htmlFor="w-pos">{c.position}</label>
-                <select id="w-pos" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value as "right" | "left" })}>
-                  <option value="right">{c.positions.right}</option>
-                  <option value="left">{c.positions.left}</option>
-                </select>
+                <label>{c.whoAnswers}</label>
+                {(["auto", "human"] as const).map((m) => (
+                  <label key={m} className="check">
+                    <input type="radio" name="w-mode" checked={form.mode === m} onChange={() => setForm({ ...form, mode: m })} />
+                    {c.modes[m]}
+                  </label>
+                ))}
               </div>
-            </div>
-            <div className="field">
-              <label>{c.whoAnswers}</label>
-              {(["auto", "human"] as const).map((m) => (
-                <label key={m} className="check">
-                  <input type="radio" name="w-mode" checked={form.mode === m} onChange={() => setForm({ ...form, mode: m })} />
-                  {c.modes[m]}
-                </label>
-              ))}
-            </div>
-            {branding && <p className="hint">{c.branding}</p>}
-            <div className="actions">
-              {status === "saved" && <span className="saved">{c.saved}</span>}
-              {status === "error" && <span className="error-text">{c.error}</span>}
-              <button className="link-btn link-danger" disabled={busy} onClick={() => update({ enabled: false })}>{c.turnOff}</button>
-              <button className="btn" disabled={busy || !/^#[0-9a-fA-F]{6}$/.test(form.color)}
-                onClick={() => update({ color: form.color, position: form.position, mode: form.mode })}>
-                {c.save}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+              {branding && <p className="hint">{c.branding}</p>}
+              <div className="actions">
+                {status === "saved" && <span className="saved">{c.saved}</span>}
+                {status === "error" && <span className="error-text">{c.error}</span>}
+                <button className="link-btn link-danger" disabled={busy} onClick={() => update({ enabled: false })}>{c.turnOff}</button>
+                <button className="btn" disabled={busy || !/^#[0-9a-fA-F]{6}$/.test(form.color)}
+                  onClick={() => update({ color: form.color, position: form.position, mode: form.mode })}>
+                  {c.save}
+                </button>
+              </div>
+            </>
+          )}
+        </ChannelRow>
 
-      <div className="messaging-grid">
         {(["whatsapp", "instagram"] as const).map((p) => {
           const ch = messagingChannel(p);
           return (
             <MessagingChannelCard key={`${p}-${ch?.id ?? "none"}-${ch?.status ?? ""}`} platform={p} channel={ch}
-              ready={data.messaging_ready !== false} roomLeft={roomLeft} maxChannels={data.max_channels} onChanged={reload} />
+              ready={data.messaging_ready !== false} roomLeft={roomLeft} maxChannels={data.max_channels} onChanged={reload}
+              open={openRow === p} onToggle={(force) => toggle(p, force)} />
           );
         })}
-      </div>
 
-      <div className="coming-grid">
-        <div className="card coming-card">
-          <h2 className="channel-title">{t.inbox.channelNames.email}</h2>
-          <p className="hint">{c.emailDesc}</p>
-          <span className="step">{fill(c.comingStep, { n: 6 })}</span>
-        </div>
+        <ChannelRow kind="email" name={t.inbox.channelNames.email} className="channel-email" open={false}
+          action={<span className="step">{fill(c.comingStep, { n: 6 })}</span>} />
       </div>
     </>
   );
