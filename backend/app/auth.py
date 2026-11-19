@@ -19,7 +19,7 @@ _jwks: jwt.PyJWKClient | None = None
 def _jwks_client() -> jwt.PyJWKClient:
     global _jwks
     if _jwks is None:
-        url = f"{get_settings().supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        url = f"{get_settings().supabase_base}/auth/v1/.well-known/jwks.json"
         _jwks = jwt.PyJWKClient(url, cache_keys=True)
     return _jwks
 

@@ -20,8 +20,12 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    """Render's health check. Also reports whether Supabase is reachable."""
-    return {"status": "ok", "database": "ok" if db.ping() else "unreachable"}
+    """Render's health check. Also reports whether Supabase is reachable, and why not."""
+    ok, reason = db.check()
+    out = {"status": "ok", "database": "ok" if ok else "unreachable"}
+    if not ok:
+        out["reason"] = reason
+    return out
 
 
 app.include_router(me.router)

@@ -26,8 +26,13 @@ class Settings(BaseSettings):
         return [o.strip().rstrip("/") for o in self.web_url.split(",") if o.strip()]
 
     @property
+    def supabase_base(self) -> str:
+        # Tolerate a pasted URL with a trailing slash or /rest/v1.
+        return self.supabase_url.strip().rstrip("/").removesuffix("/rest/v1")
+
+    @property
     def rest_url(self) -> str:
-        return f"{self.supabase_url.rstrip('/')}/rest/v1"
+        return f"{self.supabase_base}/rest/v1"
 
 
 @lru_cache
