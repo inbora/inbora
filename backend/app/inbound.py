@@ -16,7 +16,8 @@ def _now() -> str:
 
 
 def get_or_create_contact(channel: dict, external_id: str, name: str | None = None,
-                          email: str | None = None, phone: str | None = None) -> dict:
+                          email: str | None = None, phone: str | None = None,
+                          username: str | None = None) -> dict:
     row = {"tenant_id": channel["tenant_id"], "channel_id": channel["id"], "external_id": external_id}
     if name:
         row["name"] = name[:120]
@@ -24,6 +25,8 @@ def get_or_create_contact(channel: dict, external_id: str, name: str | None = No
         row["email"] = email[:200]
     if phone:
         row["phone"] = phone[:40]
+    if username:
+        row["username"] = username.lstrip("@")[:100]
     # Merge only the fields we were given; an existing name is never blanked.
     stored = db.insert("contacts", row, on_conflict="channel_id,external_id", merge=True)
     return stored[0]
@@ -53,6 +56,7 @@ def receive_message(
     contact_name: str | None = None,
     contact_email: str | None = None,
     contact_phone: str | None = None,
+    contact_username: str | None = None,
     attachment_url: str | None = None,
     attachment_mime: str | None = None,
     external_message_id: str | None = None,
@@ -61,7 +65,8 @@ def receive_message(
 ) -> dict[str, Any]:
     """Store a customer's message and, if the agent should answer, queue it.
     `channel` is a row of the channels table. Returns ids for the caller."""
-    contact = get_or_create_contact(channel, external_contact_id, contact_name, contact_email, contact_phone)
+    contact = get_or_create_contact(channel, external_contact_id, contact_name, contact_email, contact_phone,
+                                    contact_username)
     thread = get_or_create_thread(channel, contact, external_thread_id)
 
     msg = db.insert("messages", {

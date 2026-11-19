@@ -21,6 +21,7 @@ type ThreadRow = {
   contact_email: string | null;
   contact_phone: string | null;
   contact_external_id: string;
+  contact_username?: string | null;
 };
 
 type Message = {
@@ -45,7 +46,7 @@ function deliveryText(err: string, ti: { errWindow: string; errDisconnected: str
 
 type Detail = {
   thread: ThreadRow & { channel_id: string };
-  contact: { id: string; name: string | null; email: string | null; phone: string | null; external_id: string };
+  contact: { id: string; name: string | null; email: string | null; phone: string | null; username?: string | null; external_id: string };
   channel: { id: string; type: ChannelType; mode: "auto" | "human" };
   messages: Message[];
 };
@@ -220,7 +221,10 @@ export default function Inbox() {
             <button key={th.id} className={`thread-row${th.id === selected ? " thread-row-on" : ""}${th.unread ? " thread-row-unread" : ""}`}
               onClick={() => open(th.id)}>
               <div className="thread-row-top">
-                <span className="thread-name" dir="auto">{contactLabel(th, ti.visitor)}</span>
+                <span className="thread-name">{(() => {
+                  const who = identity(rowWho(th), th.channel_type, ti.visitor);
+                  return <><bdi>{who.name}</bdi>{who.handle && <span className="handle" dir="ltr">{who.handle}</span>}</>;
+                })()}</span>
                 <span className="thread-time">{when(th.last_message_at, lang)}</span>
               </div>
               <div className="thread-row-bottom">
@@ -251,9 +255,23 @@ export default function Inbox() {
   );
 }
 
-function contactLabel(c: { contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; contact_external_id?: string }, visitor: string) {
-  return c.contact_name || c.contact_email || c.contact_phone || `${visitor} ${(c.contact_external_id || "").slice(2, 6)}`;
+type Who = { name?: string | null; email?: string | null; phone?: string | null; username?: string | null; external_id?: string };
+
+/** The customer's name (bold) and, next to it, how they're reached: their
+    Instagram @username or WhatsApp number. Without a name, the @username /
+    number / email becomes the main label. */
+function identity(c: Who, channel: string, visitor: string): { name: string; handle: string | null } {
+  const at = c.username ? `@${c.username.replace(/^@/, "")}` : null;
+  const name = c.name || at || c.email || c.phone || `${visitor} ${(c.external_id || "").slice(2, 6)}`;
+  let handle: string | null = null;
+  if (channel === "instagram") handle = at;
+  else if (channel === "whatsapp") handle = c.phone ?? null;
+  else handle = c.email ?? null;
+  return { name, handle: handle && handle !== name ? handle : null };
 }
+
+const rowWho = (th: ThreadRow): Who => ({ name: th.contact_name, email: th.contact_email, phone: th.contact_phone,
+  username: th.contact_username, external_id: th.contact_external_id });
 
 function when(ts: string, lang: string) {
   const d = new Date(ts);
@@ -406,7 +424,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
     }
   }
 
-  const name = contact.name || contact.email || contact.phone || `${ti.visitor} ${contact.external_id.slice(2, 6)}`;
+  const who = identity(contact, channel.type, ti.visitor);
+  const name = who.name;
+  const igUser = channel.type === "instagram" && contact.username ? contact.username.replace(/^@/, "") : null;
   let lastDay = "";
 
   return (
@@ -414,11 +434,16 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
       <header className="thread-head">
         <button className="link-btn thread-back" onClick={onBack}>← {ti.back}</button>
         <div className="thread-who">
-          <div className="thread-title" dir="auto">{name}</div>
+          <div className="thread-title">
+            <bdi>{name}</bdi>
+            {who.handle && (igUser
+              ? <a className="handle" dir="ltr" href={`https://instagram.com/${encodeURIComponent(igUser)}`} target="_blank" rel="noopener noreferrer">{who.handle} ↗</a>
+              : <span className="handle" dir="ltr">{who.handle}</span>)}
+          </div>
           <div className="thread-sub">
             <span className={`chan chan-${channel.type}`}>{ti.channelNames[channel.type]}</span>
-            {contact.email && name !== contact.email && <span dir="ltr">{contact.email}</span>}
-            {contact.phone && name !== contact.phone && <span dir="ltr">{contact.phone}</span>}
+            {contact.email && name !== contact.email && who.handle !== contact.email && <span dir="ltr">{contact.email}</span>}
+            {contact.phone && name !== contact.phone && who.handle !== contact.phone && <span dir="ltr">{contact.phone}</span>}
           </div>
         </div>
         <div className="thread-actions">

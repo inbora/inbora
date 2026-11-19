@@ -140,7 +140,7 @@ def handle_alert(payload: dict) -> str:
     if thread is None:
         return "thread-gone"
     tenant = db.select_one("tenants", {"select": "name,default_language", "id": f"eq.{thread['tenant_id']}"}) or {}
-    contact = db.select_one("contacts", {"select": "name,email,phone,external_id", "id": f"eq.{thread['contact_id']}"}) or {}
+    contact = db.select_one("contacts", {"select": "name,email,phone,username,external_id", "id": f"eq.{thread['contact_id']}"}) or {}
     channel = db.select_one("channels", {"select": "type", "id": f"eq.{thread['channel_id']}"}) or {}
     people = _recipients(thread["tenant_id"])
     if not people:
@@ -150,7 +150,8 @@ def handle_alert(payload: dict) -> str:
     t = TEXTS.get(lang, TEXTS["en"])
     kind = payload.get("kind", "escalated")
     title = t.get(kind, t["escalated"])
-    who = (contact.get("name") or contact.get("email") or contact.get("phone")
+    who = (contact.get("name") or (f"@{contact['username']}" if contact.get("username") else None)
+           or contact.get("email") or contact.get("phone")
            or (t["visitor"] if channel.get("type") == "widget" else contact.get("external_id")) or "—")
     where = t["channel"].get(channel.get("type", ""), channel.get("type", ""))
     preview = thread.get("last_message_preview") or ""

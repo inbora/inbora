@@ -392,3 +392,8 @@ a.btn:hover { text-decoration: none; }
 .ch-open .ch-click { border-radius: 14px 14px 0 0; }
 .chan-dot-widget { background: #3b5bdb; }
 .chan-dot-email { background: #9aa1ab; }
+
+/* Customer identity: name + @username / number */
+.handle { color: var(--muted); font-weight: 400; font-size: 12.5px; margin-inline-start: 6px; }
+.thread-title .handle { font-size: 13px; }
+a.handle:hover { color: var(--accent); }

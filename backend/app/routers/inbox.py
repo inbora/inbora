@@ -97,7 +97,7 @@ def get_thread(thread_id: str, after: int | None = None, mark_read: bool = True,
     for m in msgs:
         m["author_name"] = names.get(m.pop("author_id", None) or "")
 
-    contact = db.select_one("contacts", {"select": "id,name,email,phone,external_id", "id": f"eq.{t['contact_id']}"})
+    contact = db.select_one("contacts", {"select": "id,name,email,phone,username,external_id", "id": f"eq.{t['contact_id']}"})
     channel = db.select_one("channels", {"select": "id,type,mode", "id": f"eq.{t['channel_id']}"})
     return {"thread": t, "contact": contact, "channel": channel, "messages": msgs}
 

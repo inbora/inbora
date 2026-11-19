@@ -88,19 +88,20 @@ def _channel(payload: dict) -> dict | None:
     return ch
 
 
-def _participant(payload: dict) -> tuple[str, str | None, str | None]:
-    """(external id, name, phone) of the customer, in either direction."""
+def _participant(payload: dict) -> tuple[str, str | None, str | None, str | None]:
+    """(external id, name, phone, @username) of the customer, in either direction."""
     conv = payload.get("conversation") or {}
     msg = payload.get("message") or {}
     sender = msg.get("sender") or {}
     pid = conv.get("participantId") or ""
     if not pid and msg.get("direction") == "incoming":
         pid = sender.get("id") or ""
-    name = conv.get("participantName") or None
-    if not name and conv.get("participantUsername"):
-        name = "@" + conv["participantUsername"].lstrip("@")
+    name = (conv.get("participantName") or "").strip() or None
+    username = (conv.get("participantUsername") or "").strip().lstrip("@") or None
+    if name and username and name.lstrip("@") == username:
+        name = None                      # no real name: just the @username
     phone = sender.get("phoneNumber") if msg.get("direction") == "incoming" else None
-    return pid, name, phone
+    return pid, name, phone, username
 
 
 def _first_image(msg: dict) -> tuple[str | None, str | None, str | None]:
@@ -123,7 +124,7 @@ def on_message_received(payload: dict) -> str:
     msg = payload.get("message") or {}
     if (msg.get("platform") or ch["type"]) != ch["type"]:
         return "platform-mismatch"
-    pid, name, phone = _participant(payload)
+    pid, name, phone, username = _participant(payload)
     if not pid:
         return "no-participant"
     image_url, image_mime, other = _first_image(msg)
@@ -132,7 +133,7 @@ def on_message_received(payload: dict) -> str:
         text = f"[The customer sent a {other}]"
     standby = bool((payload.get("metadata") or {}).get("standby"))
     res = inbound.receive_message(
-        ch, pid, text, contact_name=name, contact_phone=phone,
+        ch, pid, text, contact_name=name, contact_phone=phone, contact_username=username,
         attachment_url=image_url, attachment_mime=image_mime,
         external_message_id=msg.get("id"),
         external_thread_id=(payload.get("conversation") or {}).get("id") or msg.get("conversationId"),
@@ -162,13 +163,13 @@ def on_message_sent(payload: dict) -> str:
     ch = _channel(payload)
     if ch is None:
         return "no-channel"
-    pid, name, _ = _participant(payload)
+    pid, name, _, username = _participant(payload)
     if not pid:
         return "no-participant"
     text = (msg.get("text") or "").strip()
     image_url, image_mime, _ = _first_image(msg)
     conv_id = (payload.get("conversation") or {}).get("id") or msg.get("conversationId")
-    contact = inbound.get_or_create_contact(ch, pid, name)
+    contact = inbound.get_or_create_contact(ch, pid, name, username=username)
     thread = inbound.get_or_create_thread(ch, contact, conv_id)
     if _is_echo(thread["id"], text):
         return "echo"
