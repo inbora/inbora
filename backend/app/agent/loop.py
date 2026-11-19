@@ -1,8 +1,10 @@
 """The tool-use loop (ported from Grinta's run_loop)."""
+import time
 from dataclasses import dataclass, field
 
 from google.genai import types
 
+from ..config import get_settings
 from . import gemini, guards
 from .context import TenantContext
 from .prompt import build_system_prompt
@@ -31,9 +33,13 @@ def run(
     system = build_system_prompt(ctx, channel=channel,
                                  customer_name=guards.plausible_name(customer_name))
     history = list(history)
+    deadline = time.monotonic() + get_settings().agent_deadline_seconds
 
-    for _ in range(MAX_ROUNDS):
-        resp = gemini.generate(history, system, BOT_TOOLS)
+    for round_no in range(MAX_ROUNDS):
+        if round_no and time.monotonic() > deadline:
+            print("[agent] reply deadline passed between tool rounds")
+            break
+        resp = gemini.generate(history, system, BOT_TOOLS, deadline=deadline)
         content = resp.candidates[0].content
         history.append(content)
         parts = content.parts or []

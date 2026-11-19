@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     # Tried in order; if one fails or is overloaded, the next one answers.
     gemini_models: str = "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-3-flash-preview"
+    # A model that takes longer than this is abandoned and the next one is tried.
+    gemini_timeout_seconds: float = 20
+    # Total time one reply may take (all models, all tool rounds) before the
+    # customer gets the "technical problem" message instead.
+    agent_deadline_seconds: float = 50
 
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True

@@ -30,10 +30,14 @@ export default function AgentTestChat() {
     setInput("");
     setBusy(true);
     setError("");
+    // Give up after 75 s instead of showing "Typing…" forever.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 75_000);
     try {
       const { data } = await createClient().auth.getSession();
       const res = await fetch(`${API_URL}/agent/test`, {
         method: "POST",
+        signal: abort.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${data.session?.access_token ?? ""}`,
@@ -48,9 +52,10 @@ export default function AgentTestChat() {
       const body = await res.json();
       setArticles(body.articles);
       setMsgs([...next, { role: "assistant", content: body.reply, escalated: body.escalated }]);
-    } catch {
-      setError(t.agentPage.error);
+    } catch (err) {
+      setError(err instanceof DOMException && err.name === "AbortError" ? t.agentPage.timeout : t.agentPage.error);
     } finally {
+      clearTimeout(timer);
       setBusy(false);
     }
   }

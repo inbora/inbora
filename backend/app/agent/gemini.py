@@ -1,5 +1,8 @@
 """Gemini calls with model fallback (ported from Grinta): if one model fails
-(e.g. 503 overloaded) or returns an empty answer, the next one is tried."""
+(e.g. 503 overloaded), times out, or returns an empty answer, the next one is
+tried."""
+import time
+
 from google import genai
 from google.genai import types
 
@@ -18,7 +21,15 @@ def client() -> genai.Client:
         key = get_settings().gemini_api_key
         if not key:
             raise AgentUnavailable("GEMINI_API_KEY is not set")
-        _client = genai.Client(api_key=key)
+        _client = genai.Client(
+            api_key=key,
+            http_options=types.HttpOptions(
+                timeout=int(get_settings().gemini_timeout_seconds * 1000),   # milliseconds
+                # No retries inside the SDK: a slow or failing model should hand
+                # over to the next model right away.
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
     return _client
 
 
@@ -27,9 +38,15 @@ def models() -> list[str]:
 
 
 def generate(history: list[types.Content], system_instruction: str,
-             tools: list[types.Tool] | None) -> types.GenerateContentResponse:
+             tools: list[types.Tool] | None,
+             deadline: float | None = None) -> types.GenerateContentResponse:
+    """deadline: a time.monotonic() value; no new model is tried after it."""
     last_error: Exception | None = None
     for name in models():
+        if deadline is not None and time.monotonic() > deadline:
+            last_error = last_error or TimeoutError("reply deadline passed")
+            break
+        started = time.monotonic()
         try:
             resp = client().models.generate_content(
                 model=name,
@@ -51,6 +68,7 @@ def generate(history: list[types.Content], system_instruction: str,
         except AgentUnavailable:
             raise
         except Exception as e:  # noqa: BLE001 — any model error falls through to the next
-            print(f"[gemini] {name} failed: {str(e)[:160]} — trying next")
+            print(f"[gemini] {name} failed after {time.monotonic() - started:.1f}s: "
+                  f"{str(e)[:300]} — trying next")
             last_error = e
     raise AgentUnavailable(f"all models failed: {last_error}")
