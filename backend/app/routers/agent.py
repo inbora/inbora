@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from .. import db
 from ..agent import context
 from ..agent import loop as agent_loop
 from ..agent.gemini import AgentUnavailable
@@ -68,3 +69,40 @@ def test_agent(req: TestRequest, tenant_id: str = Depends(current_tenant_id)):
         "tools": result.tools_used,
         "articles": len(ctx.articles),
     }
+
+
+# ── Agent settings ─────────────────────────────────────────────────────
+
+_SETTINGS = "instructions,tone,default_language,greeting,escalation_message,updated_at"
+
+
+class SettingsIn(BaseModel):
+    instructions: str = Field(default="", max_length=5000)
+    tone: Literal["friendly", "professional", "casual", "formal"] = "friendly"
+    default_language: Literal["en", "he", "ar"] = "en"
+    greeting: str = Field(default="", max_length=500)
+    escalation_message: str = Field(default="", max_length=1000)
+
+
+@router.get("/settings")
+def get_settings_(tenant_id: str = Depends(current_tenant_id)):
+    row = db.select_one("agent_settings", {"select": _SETTINGS, "tenant_id": f"eq.{tenant_id}"})
+    if row is None:   # created at signup; recreate if it ever went missing
+        row = db.insert("agent_settings", {"tenant_id": tenant_id})[0]
+    return {k: (row.get(k) or ("" if k != "updated_at" else None)) for k in _SETTINGS.split(",")}
+
+
+@router.put("/settings")
+def put_settings(body: SettingsIn, tenant_id: str = Depends(current_tenant_id)):
+    values = {
+        "instructions": body.instructions.strip(),
+        "tone": body.tone,
+        "default_language": body.default_language,
+        "greeting": body.greeting.strip() or None,
+        "escalation_message": body.escalation_message.strip() or None,
+    }
+    rows = db.update("agent_settings", {"tenant_id": f"eq.{tenant_id}"}, values)
+    if not rows:
+        rows = db.insert("agent_settings", {"tenant_id": tenant_id, **values})
+    row = rows[0]
+    return {k: (row.get(k) or ("" if k != "updated_at" else None)) for k in _SETTINGS.split(",")}

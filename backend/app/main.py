@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, worker_loop
 from .config import get_settings
-from .routers import admin, agent, me
+from .routers import admin, agent, knowledge, me
 
 settings = get_settings()
 
@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,3 +46,4 @@ def health():
 app.include_router(me.router)
 app.include_router(admin.router)
 app.include_router(agent.router)
+app.include_router(knowledge.router)

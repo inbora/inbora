@@ -119,6 +119,22 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
 - **Separate worker later:** set `EMBEDDED_WORKER=false` on the API and run
   `python worker.py` as a Render background worker.
 
+## Step 3 — knowledge and agent settings
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0003_knowledge.sql`.
+
+- **Knowledge page:** write, edit, switch on/off and delete articles. Only
+  switched-on articles count toward the plan's character limit and reach the
+  agent; switched-off ones are drafts. Templates (shipping, returns, payment,
+  contact, opening hours — in English, Hebrew or Arabic) are added switched
+  off, because their [brackets] must be filled in first.
+- **Agent page:** instructions, tone, default language, website greeting
+  and the message used when passing a conversation to the team, next to the
+  test chat. Changes apply to the next message right away.
+- Articles and settings are changed only through the API
+  (`/knowledge`, `/agent/settings`), which enforces the limit; the database
+  lets the browser read them but not write them.
+
 ---
 
 ## Run locally
