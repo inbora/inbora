@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Agent (Step 2)
     gemini_api_key: str = ""
     # Tried in order; if one fails or is overloaded, the next one answers.
-    gemini_models: str = "gemini-2.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-3-flash-preview"
+    gemini_models: str = "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-3-flash-preview"
 
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True
