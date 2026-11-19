@@ -338,6 +338,9 @@ a.btn:hover { text-decoration: none; }
 }
 .field .check { font-size: 14px; font-weight: 400; color: var(--text); }
 .composer-foot .btn { margin-inline-start: auto; }
+.composer-foot .ai-btn + .btn { margin-inline-start: 0; }
+.ai-btn { background: #f3fbf7; color: #08603f; border: 1px solid #9fd8bd; }
+.ai-btn:hover:not(:disabled) { background: #e3f4ec; }
 
 /* AI draft box (open by default, can be hidden) */
 .draft-box { border: 1px solid #cfe9dd; background: #f3fbf7; border-radius: var(--radius); padding: 8px 10px;

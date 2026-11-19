@@ -635,9 +635,6 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
               <input dir={direction ? "auto" : undefined} maxLength={1000} placeholder={ti.draftDirection} value={direction}
                 onChange={(e) => setDirection(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); draft(); } }} />
-              <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={draft}>
-                {busy === "draft" ? ti.draftBusy : ti.draftWrite}
-              </button>
             </div>
           </div>
         )}
@@ -668,6 +665,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
             <span className="undo">{ti.draftReplaced} · <button className="link-btn" onClick={() => { setText(undoText); setUndoText(null); }}>{ti.undo}</button></span>
           )}
           <span className="hint composer-hint">{error ? <span className="error-text">{error}</span> : !team && undoText === null && ti.replyTakesOver}</span>
+          <button className="btn btn-sm ai-btn" disabled={!!busy} onClick={draft}>
+            ✦ {busy === "draft" ? ti.draftBusy : ti.draftWrite}
+          </button>
           <button className="btn btn-sm" disabled={(!text.trim() && !image) || !!busy} onClick={send}>{ti.send}</button>
         </div>
       </div>
