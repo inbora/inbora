@@ -346,3 +346,7 @@ a.btn:hover { text-decoration: none; }
 .icon-btn { background: none; border: 0; cursor: pointer; color: var(--muted); font: inherit; font-size: 16px;
   line-height: 1; padding: 2px 8px; border-radius: 6px; }
 .icon-btn:hover { background: #e3efe9; color: var(--text); }
+.name-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.name-form input { height: 34px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit;
+  font-size: 14px; background: #fff; color: var(--text); min-width: 0; flex: 1; max-width: 260px; }
+.name-form input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }

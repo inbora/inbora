@@ -1,5 +1,6 @@
 """The logged-in user, their business (tenant) and its plan."""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from .. import db
 from ..auth import CurrentUser, current_user
@@ -46,8 +47,22 @@ def me(user: CurrentUser = Depends(current_user)):
             "period_end": sub["period_end"],
         }
 
+    profile = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}
     return {
-        "user": {"id": user.id, "email": user.email, "is_super_admin": user.is_super_admin},
+        "user": {"id": user.id, "email": user.email, "is_super_admin": user.is_super_admin,
+                 "full_name": profile.get("full_name") or ""},
         "tenant": {**tenant, "role": membership["role"]},
         "plan": plan,
     }
+
+
+class ProfileIn(BaseModel):
+    full_name: str = Field(default="", max_length=80)
+
+
+@router.put("/me/profile")
+def update_profile(body: ProfileIn, user: CurrentUser = Depends(current_user)):
+    """The user's own name: shown on their replies in the inbox and used to sign AI drafts."""
+    name = " ".join(body.full_name.split())
+    db.update("profiles", {"id": f"eq.{user.id}"}, {"full_name": name or None})
+    return {"full_name": name}

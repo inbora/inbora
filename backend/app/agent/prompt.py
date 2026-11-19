@@ -14,9 +14,26 @@ _IDENTITY_BOT = (
     "business's customers on its behalf."
 )
 _IDENTITY_REP = (
-    "You are writing a reply on behalf of the {business} team. A team member will "
-    "review it and send it to the customer as their own message."
+    "You are drafting a message that a member of the {business} team will send to the "
+    "customer as their own, personal message. Write it the way that person would: a real "
+    "human on the team, writing in the first person, warm and personal."
 )
+
+_REP_STYLE = """
+## How the team member writes (these rules take priority over the style rules above)
+- {who}
+- Open with a short personal greeting, using the customer's first name if you know it.
+- If no one from the team has written in this conversation yet, briefly thank the customer for waiting.
+- Then answer or help, following the team member's direction below if there is one.
+- {closing}
+- Write as a person, never as an assistant or a bot. Don't mention the assistant or that you are AI.
+- Write in the customer's language, including the greeting and the sign-off.
+"""
+
+_REP_CLOSING_CHAT = ("End with a short friendly closing and sign off with the name, on one short line "
+                     "(for example: \"Have a great day! {sign}\"). Keep the whole message chat-length.")
+_REP_CLOSING_EMAIL = ("End with a polite closing line, then the sign-off on its own lines: the name, "
+                      "then the business name.")
 
 _STYLE = """
 ## How you write
@@ -105,9 +122,21 @@ def build_system_prompt(
     customer_name: str | None = None,
     as_rep: bool = False,
     rep_direction: str | None = None,
+    rep_name: str | None = None,
 ) -> str:
     identity = (_IDENTITY_REP if as_rep else _IDENTITY_BOT).format(business=ctx.business_name)
     out = [identity, _STYLE.format(tone=ctx.tone or "friendly", language=ctx.language_name)]
+    if as_rep:
+        name = (rep_name or "").strip()
+        if name:
+            who = f"The team member's name is {name}. Sign with their first name and the business name."
+            sign = f"{name.split()[0]}, {ctx.business_name} team"
+        else:
+            who = (f"The team member's name is not known, so sign as the {ctx.business_name} team "
+                   "(translated to the customer's language).")
+            sign = f"The {ctx.business_name} team"
+        closing = _REP_CLOSING_EMAIL if channel == "email" else _REP_CLOSING_CHAT.format(sign=sign)
+        out.append(_REP_STYLE.format(who=who, closing=closing))
 
     if ctx.instructions:
         out.append(

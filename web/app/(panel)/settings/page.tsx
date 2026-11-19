@@ -1,5 +1,6 @@
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationSettings from "@/components/NotificationSettings";
+import ProfileNameForm from "@/components/ProfileNameForm";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
 
@@ -15,6 +16,11 @@ export default async function SettingsPage() {
         <dl className="kv">
           <dt>{t.settings.account}</dt>
           <dd dir="ltr">{me?.user.email ?? "—"}</dd>
+          <dt>{t.settings.yourName}</dt>
+          <dd>
+            <ProfileNameForm initial={me?.user.full_name ?? ""} />
+            <span className="hint">{t.settings.yourNameHint}</span>
+          </dd>
           <dt>{t.settings.business}</dt>
           <dd>{me?.tenant.name ?? "—"}</dd>
           <dt>{t.settings.businessId}</dt>

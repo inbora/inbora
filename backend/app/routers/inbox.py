@@ -205,7 +205,8 @@ class DraftRequest(BaseModel):
 
 
 @router.post("/threads/{thread_id}/draft")
-def draft(thread_id: str, body: DraftRequest, tenant_id: str = Depends(current_tenant_id)):
+def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(current_user),
+          tenant_id: str = Depends(current_tenant_id)):
     t = _thread(tenant_id, thread_id)
     _draft_rate(tenant_id)
     rows = db.select("messages", {
@@ -224,11 +225,13 @@ def draft(thread_id: str, body: DraftRequest, tenant_id: str = Depends(current_t
     channel = db.select_one("channels", {"select": "type", "id": f"eq.{t['channel_id']}"}) or {}
     contact = db.select_one("contacts", {"select": "name", "id": f"eq.{t['contact_id']}"}) or {}
     ctx = context.load(tenant_id)
+    me = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}
     toolbox = Toolbox(tenant_id, thread_id=thread_id, dry_run=True)
     try:
         result = agent_loop.run(ctx, convo, toolbox, channel=channel.get("type", "widget"),
                                 customer_name=contact.get("name"), as_rep=True,
-                                rep_direction=(body.direction or "").strip() or None)
+                                rep_direction=(body.direction or "").strip() or None,
+                                rep_name=me.get("full_name"))
     except AgentUnavailable:
         raise HTTPException(503, "The assistant isn't available right now. Try again in a moment.")
     if result.fallback:

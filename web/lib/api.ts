@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export type Me = {
-  user: { id: string; email: string; is_super_admin: boolean };
+  user: { id: string; email: string; is_super_admin: boolean; full_name: string };
   tenant: { id: string; name: string; slug: string; default_language: string; status: string; role: string };
   plan: {
     code: string;
