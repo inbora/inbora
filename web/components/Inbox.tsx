@@ -402,11 +402,12 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
         </div>
       </header>
 
-      <div className={`thread-status ${team ? "thread-status-team" : ""}`}>
-        <strong>{team ? ti.statusTeam : ti.statusBot}</strong>
-        {team && thread.escalation_reason && <span> · {ti.reason}: <span dir="auto">{thread.escalation_reason}</span></span>}
-        {team && channel.mode === "auto" && <span className="hint"> · {ti.handbackHint}</span>}
-      </div>
+      {team && (
+        <div className="thread-status thread-status-team">
+          <strong>{ti.statusTeam}</strong>
+          {thread.escalation_reason && <span> · {ti.reason}: <span dir="auto">{thread.escalation_reason}</span></span>}
+        </div>
+      )}
 
       <div className="thread-log" ref={logRef}
         onScroll={(e) => {
