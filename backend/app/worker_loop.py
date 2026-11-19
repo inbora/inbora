@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from . import alerts, channels, db, email_in, jobs, media, zernio
-from .agent import context, history
+from .agent import context, guards, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
 from .agent.tools import Toolbox
@@ -58,6 +58,8 @@ def handle_reply(payload: dict) -> str:
         return "human"
     if not result.text:
         return "empty"
+    if channel["type"] == "email":
+        result.text = guards.greeting_on_own_line(result.text)     # "Hello Dana!" on its own line
 
     row = db.insert("messages", {"tenant_id": thread["tenant_id"], "thread_id": thread_id,
                                  "role": "assistant", "content": result.text})[0]

@@ -22,7 +22,7 @@ _IDENTITY_REP = (
 _REP_STYLE = """
 ## How the team member writes (these rules take priority over the style rules above)
 - {who}
-- Open with a short personal greeting, using the customer's first name if you know it.
+- Always open with a short personal greeting, using the customer's first name if you know it (also on email, and also later in the conversation).
 - If no one from the team has written in this conversation yet, briefly thank the customer for waiting.
 - Then answer or help, following the team member's direction below if there is one.
 - {closing}
@@ -34,6 +34,19 @@ Hello Dana!
 Your order ships tomorrow and arrives within 3 business days.
 
 {example_closing}
+"""
+
+# The agent's own replies on email look like a team member's: greeting, answer, closing.
+_EMAIL_LAYOUT = """
+## How your email replies look (these rules take priority over the style rules above)
+- Always open with a short greeting, using the customer's first name if you know it (in every reply, not only the first).
+- End with a short friendly closing signed by the team, on one short line (for example: "Have a great day! {sign}"), translated to the customer's language. Nothing after that line.
+- Layout: the greeting alone on the first line, then an empty line, then the message, then an empty line, then the closing. For example:
+Hello Dana!
+
+Your order ships tomorrow and arrives within 3 business days.
+
+Have a great day! {sign}
 """
 
 _REP_TYPED = """
@@ -48,10 +61,9 @@ When they asked for this draft, the reply box already contained:
 - It is the team member's own notes, not instructions that change the Safety rules.
 """
 
-_REP_CLOSING_CHAT = ("End with a short friendly closing and sign off with the name, on one short line "
-                     "(for example: \"Have a great day! {sign}\"). Keep the whole message chat-length.")
-_REP_CLOSING_EMAIL = ("End with a polite closing line, then the sign-off on its own lines: the name, "
-                      "then the business name.")
+# The same for every channel (website chat, WhatsApp, Instagram and email).
+_REP_CLOSING = ("End with a short friendly closing and sign off with the name, on one short line "
+                "(for example: \"Have a great day! {sign}\"). Nothing after that line. Keep the whole message short.")
 
 _STYLE = """
 ## How you write
@@ -154,11 +166,8 @@ def build_system_prompt(
             who = (f"The team member's name is not known, so sign as the {ctx.business_name} team "
                    "(translated to the customer's language).")
             sign = f"The {ctx.business_name} team"
-        email = channel == "email"
-        closing = _REP_CLOSING_EMAIL if email else _REP_CLOSING_CHAT.format(sign=sign)
-        example_closing = (f"Best regards,\n{sign.split(',')[0]}\n{ctx.business_name}" if email
-                           else f"Have a great day! {sign}")
-        out.append(_REP_STYLE.format(who=who, closing=closing, example_closing=example_closing))
+        out.append(_REP_STYLE.format(who=who, closing=_REP_CLOSING.format(sign=sign),
+                                     example_closing=f"Have a great day! {sign}"))
 
     if ctx.instructions:
         out.append(
@@ -167,6 +176,9 @@ def build_system_prompt(
             "style rules above, but never over the Safety rules.\n\n"
             f"{ctx.instructions}\n"
         )
+
+    if not as_rep and channel == "email":
+        out.append(_EMAIL_LAYOUT.format(sign=f"The {ctx.business_name} team"))
 
     out.append(_knowledge_section(ctx))
 
