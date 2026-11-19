@@ -39,6 +39,23 @@ type Detail = {
 };
 
 const LIST_POLL_MS = 8000;
+const DRAFT_OPEN_KEY = "inb_ai_draft_open";
+
+/** Whether the AI draft box is open. Open by default; hiding or showing it is
+    remembered in this browser (refresh, next day, every conversation). */
+function useDraftOpen(): [boolean | null, (open: boolean) => void] {
+  const [open, setOpen] = useState<boolean | null>(null);   // null until read, so it never flickers
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(DRAFT_OPEN_KEY); } catch { /* storage blocked: use the default */ }
+    setOpen(saved !== "0");
+  }, []);
+  const set = (value: boolean) => {
+    setOpen(value);
+    try { localStorage.setItem(DRAFT_OPEN_KEY, value ? "1" : "0"); } catch { /* not remembered, still works */ }
+  };
+  return [open, set];
+}
 const THREAD_POLL_MS = 4000;
 
 function useVisible() {
@@ -244,7 +261,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"" | "send" | "draft" | "status">("");
   const [error, setError] = useState("");
-  const [showDraft, setShowDraft] = useState(false);
+  const [draftOpen, setDraftOpen] = useDraftOpen();
   const [direction, setDirection] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const lastId = useRef(0);
@@ -328,7 +345,6 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
         method: "POST", body: JSON.stringify({ text: body }),
       });
       setText("");
-      setShowDraft(false);
       setDirection("");
       if (!r.delivered) setError(ti.notDelivered);
       const d = await api<Detail>(`/inbox/threads/${id}`);
@@ -417,14 +433,20 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
       </div>
 
       <div className="composer">
-        {showDraft && (
-          <div className="draft-row">
-            <input dir={direction ? "auto" : undefined} maxLength={1000} placeholder={ti.draftDirection} value={direction}
-              onChange={(e) => setDirection(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); draft(); } }} />
-            <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={draft}>
-              {busy === "draft" ? ti.draftBusy : ti.draftWrite}
-            </button>
+        {draftOpen === true && (
+          <div className="draft-box">
+            <div className="draft-top">
+              <span className="draft-label">✦ {ti.draft}</span>
+              <button className="icon-btn" title={ti.hideDraft} aria-label={ti.hideDraft} onClick={() => setDraftOpen(false)}>—</button>
+            </div>
+            <div className="draft-row">
+              <input dir={direction ? "auto" : undefined} maxLength={1000} placeholder={ti.draftDirection} value={direction}
+                onChange={(e) => setDirection(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); draft(); } }} />
+              <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={draft}>
+                {busy === "draft" ? ti.draftBusy : ti.draftWrite}
+              </button>
+            </div>
           </div>
         )}
         <textarea dir={text ? "auto" : undefined} rows={3} maxLength={4000} placeholder={ti.replyPlaceholder} value={text}
@@ -433,7 +455,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
           }} />
         <div className="composer-foot">
-          <button className={`link-btn${showDraft ? " link-on" : ""}`} onClick={() => setShowDraft(!showDraft)}>✦ {ti.draft}</button>
+          {draftOpen === false && (
+            <button className="link-btn" onClick={() => setDraftOpen(true)}>✦ {ti.showDraft}</button>
+          )}
           <span className="hint composer-hint">{error ? <span className="error-text">{error}</span> : !team && ti.replyTakesOver}</span>
           <button className="btn btn-sm" disabled={!text.trim() || !!busy} onClick={send}>{ti.send}</button>
         </div>

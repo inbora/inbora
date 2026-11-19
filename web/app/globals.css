@@ -337,3 +337,12 @@ a.btn:hover { text-decoration: none; }
 }
 .field .check { font-size: 14px; font-weight: 400; color: var(--text); }
 .composer-foot .btn { margin-inline-start: auto; }
+
+/* AI draft box (open by default, can be hidden) */
+.draft-box { border: 1px solid #cfe9dd; background: #f3fbf7; border-radius: var(--radius); padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px; }
+.draft-top { display: flex; align-items: center; justify-content: space-between; }
+.draft-label { font-size: 12px; font-weight: 700; color: #08603f; }
+.icon-btn { background: none; border: 0; cursor: pointer; color: var(--muted); font: inherit; font-size: 16px;
+  line-height: 1; padding: 2px 8px; border-radius: 6px; }
+.icon-btn:hover { background: #e3efe9; color: var(--text); }
