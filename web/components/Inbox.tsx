@@ -551,12 +551,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
           </div>
         </div>
         <div className="thread-actions">
-          {archived ? (
-            <button className="btn btn-sm" onClick={() => onArchive(false)}>↩ {ti.unarchive}</button>
-          ) : (
+          {!archived && (
             <>
               <button className="link-btn" onClick={markUnread}>{ti.markUnread}</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onArchive(true)}>🗄 {ti.archive}</button>
               {team ? (
                 <button className="btn btn-secondary btn-sm" disabled={!!busy || channel.mode !== "auto"} onClick={() => act("handback")}>
                   {ti.handback}
@@ -571,6 +568,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
               onClick={(e) => { e.stopPropagation(); setMoreOpen(!moreOpen); }}>⋯</button>
             {moreOpen && (
               <div className="row-menu head-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                <button role="menuitem" onClick={() => { setMoreOpen(false); onArchive(!archived); }}>
+                  {archived ? `↩ ${ti.unarchive}` : `🗄 ${ti.archive}`}
+                </button>
                 <button role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDelete(channel.type === "email"); }}>🗑 {ti.deleteConv}</button>
               </div>
             )}
