@@ -10,7 +10,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from .. import channels, db, jobs, media
-from ..agent import context, history
+from ..agent import context, guards, history
 from ..agent import loop as agent_loop
 from ..agent.gemini import AgentUnavailable
 from ..agent.tools import Toolbox
@@ -256,7 +256,7 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
         raise HTTPException(503, "The assistant isn't available right now. Try again in a moment.")
     if result.fallback:
         raise HTTPException(503, "The assistant couldn't write a draft. Try again in a moment.")
-    return {"text": result.text}
+    return {"text": guards.greeting_on_own_line(result.text)}
 
 
 # ── Archive and delete

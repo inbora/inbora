@@ -60,3 +60,23 @@ def plausible_name(name: str | None) -> str:
     if re.sub(r"[\s+\-()]", "", name).isdigit():
         return ""
     return name[:80]
+
+
+_GREETING = re.compile(r"^([^\n!,.?]{1,40}[!,])[ \t]+(?=\S)")
+
+
+def greeting_on_own_line(text: str) -> str:
+    """A team member's draft that starts "Hello Dana! Your order..." gets its
+    greeting on a line of its own ("Hello Dana!", empty line, the message)."""
+    text = (text or "").strip()
+    m = _GREETING.match(text)
+    if not m:
+        return text
+    greeting = m.group(1)
+    # "Hello Dana!" — or, with a comma, only a short "Hi Dana," (not a first sentence).
+    if len(greeting.split()) > (5 if greeting.endswith("!") else 3):
+        return text
+    rest = text[m.end():]
+    if rest[:1].isalpha() and rest[:1].islower():       # "Hi Dana, it ships..." reads as one sentence
+        return text
+    return f"{greeting}\n\n{rest}"

@@ -28,6 +28,12 @@ _REP_STYLE = """
 - {closing}
 - Write as a person, never as an assistant or a bot. Don't mention the assistant or that you are AI.
 - Write in the customer's language, including the greeting and the sign-off.
+- Layout: the greeting alone on the first line, then an empty line, then the message, then an empty line, then the closing. For example:
+Hello Dana!
+
+Your order ships tomorrow and arrives within 3 business days.
+
+{example_closing}
 """
 
 _REP_TYPED = """
@@ -148,8 +154,11 @@ def build_system_prompt(
             who = (f"The team member's name is not known, so sign as the {ctx.business_name} team "
                    "(translated to the customer's language).")
             sign = f"The {ctx.business_name} team"
-        closing = _REP_CLOSING_EMAIL if channel == "email" else _REP_CLOSING_CHAT.format(sign=sign)
-        out.append(_REP_STYLE.format(who=who, closing=closing))
+        email = channel == "email"
+        closing = _REP_CLOSING_EMAIL if email else _REP_CLOSING_CHAT.format(sign=sign)
+        example_closing = (f"Best regards,\n{sign.split(',')[0]}\n{ctx.business_name}" if email
+                           else f"Have a great day! {sign}")
+        out.append(_REP_STYLE.format(who=who, closing=closing, example_closing=example_closing))
 
     if ctx.instructions:
         out.append(
