@@ -18,8 +18,14 @@ class Settings(BaseSettings):
     # Web panel origin, for CORS (comma-separated if more than one)
     web_url: str = "http://localhost:3000"
 
-    # Used from Step 2 onward
+    # Agent (Step 2)
     gemini_api_key: str = ""
+    # Tried in order; if one fails or is overloaded, the next one answers.
+    gemini_models: str = "gemini-2.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-3-flash-preview"
+
+    # Background worker. true = runs inside the API process (no extra service).
+    embedded_worker: bool = True
+    worker_concurrency: int = 4
 
     @property
     def cors_origins(self) -> list[str]:

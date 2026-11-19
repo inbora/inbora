@@ -47,6 +47,42 @@ def select_one(table: str, params: dict[str, str]) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
+def insert(table: str, row: dict[str, Any] | list[dict[str, Any]],
+           on_conflict: str | None = None, merge: bool = False) -> list[dict[str, Any]]:
+    """Insert and return the stored row(s). With on_conflict, an existing row is
+    merged (merge=True) or left untouched (merge=False, nothing returned for it)."""
+    prefer = ["return=representation"]
+    params = {}
+    if on_conflict:
+        params["on_conflict"] = on_conflict
+        prefer.append("resolution=merge-duplicates" if merge else "resolution=ignore-duplicates")
+    res = client().post(f"/{table}", params=params, json=row, headers={"Prefer": ",".join(prefer)})
+    res.raise_for_status()
+    return res.json()
+
+
+def update(table: str, filters: dict[str, str], values: dict[str, Any]) -> list[dict[str, Any]]:
+    if not filters:
+        raise ValueError("update without filters is not allowed")
+    res = client().patch(f"/{table}", params=filters, json=values,
+                         headers={"Prefer": "return=representation"})
+    res.raise_for_status()
+    return res.json()
+
+
+def delete(table: str, filters: dict[str, str]) -> None:
+    if not filters:
+        raise ValueError("delete without filters is not allowed")
+    res = client().delete(f"/{table}", params=filters, headers={"Prefer": "return=minimal"})
+    res.raise_for_status()
+
+
+def rpc(function: str, args: dict[str, Any] | None = None) -> Any:
+    res = client().post(f"/rpc/{function}", json=args or {})
+    res.raise_for_status()
+    return res.json() if res.content else None
+
+
 def check() -> tuple[bool, str]:
     """(ok, reason). The reason names what failed, without any secrets."""
     try:

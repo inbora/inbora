@@ -1,13 +1,9 @@
-"""Background worker — placeholder.
+"""Run the background worker as its own process (optional).
 
-From Step 2 this process takes reply jobs from the `jobs` table, runs the
-agent and sends the answer. For now it only proves it can start and reach
-the database. It is NOT deployed in Step 1 (see render.yaml)."""
-import time
-
-from app import db
+By default the worker runs inside the API (EMBEDDED_WORKER=true). When traffic
+grows, set EMBEDDED_WORKER=false on the API and run this as a separate Render
+background worker: `python worker.py`."""
+from app.worker_loop import run_forever
 
 if __name__ == "__main__":
-    print(f"[worker] started, database {'ok' if db.ping() else 'unreachable'}", flush=True)
-    while True:
-        time.sleep(60)
+    run_forever()

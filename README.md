@@ -79,6 +79,48 @@ own business on the Free plan.
 
 ---
 
+## Step 2 — agent core
+
+The agent answers from each business's own instructions and knowledge
+articles, using Gemini with the same model fallback as the Grinta agent.
+Incoming messages are stored first and answered by a background worker,
+which runs inside the API process for now (no extra Render service).
+
+**Setup**
+
+1. Supabase → SQL Editor → run `supabase/migrations/0002_agent_core.sql`.
+2. Google AI Studio → create an API key → on Render, `inbora-api` →
+   Environment → `GEMINI_API_KEY`.
+3. Push to GitHub; Render deploys. `/health` should show `"agent":"ok"`.
+
+**Try it:** open the **Agent** page in the panel and chat with the test box.
+Until Step 3 adds the Knowledge page, add articles in Supabase →
+Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
+
+**Pieces**
+
+| File | What it does |
+| --- | --- |
+| `backend/app/agent/prompt.py` | Base rules + the business's instructions + its articles |
+| `backend/app/agent/loop.py` | Gemini tool loop, reasoning stripping, raw-output guard |
+| `backend/app/agent/tools.py` | `escalate_to_human`, `collect_contact_email` |
+| `backend/app/inbound.py` | Every incoming message: store it, queue a reply |
+| `backend/app/worker_loop.py` | Takes queued jobs, answers, retries 3 times |
+| `backend/app/routers/agent.py` | `POST /agent/test` for the panel's test chat (writes nothing) |
+
+- **Newest message wins:** each customer message bumps `threads.reply_epoch`;
+  a reply written for an older epoch is thrown away, so quick bursts get one
+  answer. Replies wait 2 seconds for follow-up messages.
+- **Human takeover:** while a thread is `escalated`, or its channel is in
+  human mode, the agent stays quiet.
+- **Failures:** a reply job is retried after 5 s and 30 s; if every attempt
+  fails, the thread is handed to the team instead of leaving the customer
+  waiting.
+- **Separate worker later:** set `EMBEDDED_WORKER=false` on the API and run
+  `python worker.py` as a Render background worker.
+
+---
+
 ## Run locally
 
     # API

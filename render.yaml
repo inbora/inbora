@@ -26,6 +26,9 @@ services:
         value: https://app.inbora.ai
       - key: GEMINI_API_KEY
         sync: false
+      # The background worker runs inside this service (Step 2).
+      - key: EMBEDDED_WORKER
+        value: "true"
 
   # ── Web panel (Next.js) ──────────────────────────────────────────
   - type: web
@@ -50,7 +53,8 @@ services:
       - key: NEXT_PUBLIC_SITE_URL
         value: https://app.inbora.ai
 
-  # ── Worker — added in Step 2 (background workers have no free plan) ──
+  # ── Separate worker — optional, when traffic grows. Then set EMBEDDED_WORKER=false
+  #    on inbora-api. (Background workers have no free plan.) ──
   # - type: worker
   #   name: inbora-worker
   #   runtime: python
