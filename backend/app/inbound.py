@@ -75,8 +75,9 @@ def receive_message(
         "attachment_mime": attachment_mime, "external_id": external_message_id,
     })[0]
     preview = (text or "").strip()[:140] or ("📷" if (attachment_mime or "").startswith("image/") else "[attachment]")
+    # (archived_at = None: an archived conversation comes back to the inbox)
     db.update("threads", {"id": f"eq.{thread['id']}"},
-              {"unread": True, "last_message_at": _now(), "last_message_preview": preview})
+              {"unread": True, "last_message_at": _now(), "last_message_preview": preview, "archived_at": None})
 
     if thread.get("status") == "escalated":
         if _team_went_quiet(thread):

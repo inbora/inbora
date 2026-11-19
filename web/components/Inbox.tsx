@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
 type Filter = "all" | "escalated";
+type View = "inbox" | "archived";
 type ChannelType = "widget" | "whatsapp" | "instagram" | "email";
 type DateRange = "any" | "1" | "7" | "30" | "custom";
 
@@ -22,6 +23,7 @@ type ThreadRow = {
   contact_phone: string | null;
   contact_external_id: string;
   contact_username?: string | null;
+  archived_at?: string | null;
 };
 
 type Message = {
@@ -98,7 +100,19 @@ export default function Inbox() {
   const [dateTo, setDateTo] = useState("");
   const [threads, setThreads] = useState<ThreadRow[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [counts, setCounts] = useState({ escalated: 0, unread: 0 });
+  const [counts, setCounts] = useState({ escalated: 0, unread: 0, archived: 0 });
+  const [view, setView] = useState<View>("inbox");
+  const [menuFor, setMenuFor] = useState<string | null>(null);       // row whose ⋯ menu is open
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Close a row menu on any click outside it.
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuFor]);
 
   // Debounce the search box.
   useEffect(() => {
@@ -108,7 +122,7 @@ export default function Inbox() {
 
   const query = useCallback(
     (before?: string) => {
-      const p = new URLSearchParams({ filter });
+      const p = new URLSearchParams({ filter: view === "archived" ? "archived" : filter });
       if (channel) p.set("channel", channel);
       if (q) p.set("q", q);
       if (range === "custom") {
@@ -118,14 +132,14 @@ export default function Inbox() {
       if (before) p.set("before", before);
       return `/inbox/threads?${p}`;
     },
-    [filter, channel, q, range, dateFrom, dateTo],
+    [view, filter, channel, q, range, dateFrom, dateTo],
   );
 
   const refresh = useCallback(async () => {
     try {
       const [list, c] = await Promise.all([
         api<{ threads: ThreadRow[]; has_more: boolean }>(query()),
-        api<{ escalated: number; unread: number }>("/inbox/counts"),
+        api<{ escalated: number; unread: number; archived: number }>("/inbox/counts"),
       ]);
       // Keep older pages the user already loaded.
       setThreads((prev) => {
@@ -172,12 +186,43 @@ export default function Inbox() {
   const markRead = (id: string, unread: boolean) =>
     setThreads((prev) => prev?.map((x) => (x.id === id ? { ...x, unread } : x)) ?? prev);
 
+  const dropFromList = (id: string) => {
+    setThreads((prev) => prev?.filter((x) => x.id !== id) ?? prev);
+    if (selected === id) open(null);
+  };
+
+  async function setArchived(id: string, archived: boolean) {
+    setMenuFor(null);
+    await api(`/inbox/threads/${id}/archive`, { method: "POST", body: JSON.stringify({ archived }) });
+    dropFromList(id);          // it moves to the other list
+    refresh();
+  }
+
+  async function deleteThread() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await api(`/inbox/threads/${confirmDelete}`, { method: "DELETE" });
+      dropFromList(confirmDelete);
+      setConfirmDelete(null);
+      refresh();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const filtersActive = filter !== "all" || channel || q || range !== "any";
 
   return (
     <div className={`inbox${selected ? " inbox-has-thread" : ""}`}>
       <section className="inbox-list">
         <div className="inbox-tools">
+          {view === "archived" ? (
+            <div className="archived-head">
+              <button className="link-btn" onClick={() => { setView("inbox"); open(null); }}>← {ti.backToInbox}</button>
+              <strong>🗄 {ti.archived}</strong>
+            </div>
+          ) : (
           <div className="tabs" role="tablist">
             {(["all", "escalated"] as Filter[]).map((f) => (
               <button key={f} role="tab" aria-selected={filter === f}
@@ -187,6 +232,7 @@ export default function Inbox() {
               </button>
             ))}
           </div>
+          )}
           <input className="search" type="search" dir={search ? "auto" : undefined} placeholder={ti.search}
             value={search} onChange={(e) => setSearch(e.target.value)} />
           <div className="inbox-selects">
@@ -218,7 +264,8 @@ export default function Inbox() {
           {threads === null && <div className="list-note">…</div>}
           {threads?.length === 0 && <div className="list-note">{filtersActive ? ti.noMatch : ti.empty}</div>}
           {threads?.map((th) => (
-            <button key={th.id} className={`thread-row${th.id === selected ? " thread-row-on" : ""}${th.unread ? " thread-row-unread" : ""}`}
+            <div key={th.id} className={`thread-item${menuFor === th.id ? " thread-item-menu" : ""}`}>
+            <button className={`thread-row${th.id === selected ? " thread-row-on" : ""}${th.unread ? " thread-row-unread" : ""}`}
               onClick={() => open(th.id)}>
               <div className="thread-row-top">
                 <span className="thread-name">{(() => {
@@ -236,21 +283,55 @@ export default function Inbox() {
                 {th.status === "escalated" && <span className="tag-team">{ti.filters.escalated}</span>}
               </div>
             </button>
+            <button className="row-more" aria-label={ti.moreActions} aria-haspopup="menu" aria-expanded={menuFor === th.id}
+              onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === th.id ? null : th.id); }}>⋯</button>
+            {menuFor === th.id && (
+              <div className="row-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                <button role="menuitem" onClick={() => setArchived(th.id, view !== "archived")}>
+                  {view === "archived" ? `↩ ${ti.unarchive}` : `🗄 ${ti.archive}`}
+                </button>
+                <button role="menuitem" className="danger" onClick={() => { setMenuFor(null); setConfirmDelete(th.id); }}>
+                  🗑 {ti.deleteConv}
+                </button>
+              </div>
+            )}
+            </div>
           ))}
           {hasMore && threads && threads.length > 0 && (
             <button className="link-btn load-more" onClick={loadMore}>{ti.loadMore}</button>
           )}
         </div>
+        {view === "inbox" && (
+          <div className="list-foot">
+            <button className="link-btn" onClick={() => { setView("archived"); open(null); }}>
+              🗄 {ti.archivedCount.replace("{n}", String(counts.archived))}
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="inbox-thread">
         {selected ? (
           <ThreadView key={selected} id={selected} onBack={() => open(null)} onChanged={refresh}
-            onRead={(unread) => markRead(selected, unread)} visible={visible} />
+            onRead={(unread) => markRead(selected, unread)} visible={visible}
+            onArchive={(archived) => setArchived(selected, archived)} onDelete={() => setConfirmDelete(selected)} />
         ) : (
           <div className="thread-empty">{ti.pick}</div>
         )}
       </section>
+
+      {confirmDelete && (
+        <div className="modal-bg" role="presentation" onClick={() => !deleting && setConfirmDelete(null)}>
+          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="del-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="del-title">{ti.deleteTitle}</h3>
+            <p>{ti.deleteBody}</p>
+            <div className="actions">
+              <button className="btn btn-secondary btn-sm" disabled={deleting} onClick={() => setConfirmDelete(null)}>{ti.cancel}</button>
+              <button className="btn btn-sm btn-danger" disabled={deleting} onClick={deleteThread}>{ti.deleteConfirm}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -281,9 +362,17 @@ function when(ts: string, lang: string) {
   return d.toLocaleDateString(lang, { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
 }
 
-function ThreadView({ id, onBack, onChanged, onRead, visible }: {
+function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelete }: {
   id: string; onBack: () => void; onChanged: () => void; onRead: (unread: boolean) => void; visible: boolean;
+  onArchive: (archived: boolean) => void; onDelete: () => void;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => setMoreOpen(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [moreOpen]);
   const { t, lang } = useI18n();
   const ti = t.inbox;
   const [data, setData] = useState<Detail | null>(null);
@@ -359,6 +448,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
   if (!data) return <div className="thread-empty">…</div>;
   const { thread, contact, channel, messages } = data;
   const team = thread.status === "escalated";
+  const archived = !!thread.archived_at;
 
   async function act(path: "takeover" | "handback") {
     setBusy("status");
@@ -447,18 +537,35 @@ function ThreadView({ id, onBack, onChanged, onRead, visible }: {
           </div>
         </div>
         <div className="thread-actions">
-          <button className="link-btn" onClick={markUnread}>{ti.markUnread}</button>
-          {team ? (
-            <button className="btn btn-secondary btn-sm" disabled={!!busy || channel.mode !== "auto"} onClick={() => act("handback")}>
-              {ti.handback}
-            </button>
+          {archived ? (
+            <button className="btn btn-sm" onClick={() => onArchive(false)}>↩ {ti.unarchive}</button>
           ) : (
-            <button className="btn btn-sm" disabled={!!busy} onClick={() => act("takeover")}>{ti.takeover}</button>
+            <>
+              <button className="link-btn" onClick={markUnread}>{ti.markUnread}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onArchive(true)}>🗄 {ti.archive}</button>
+              {team ? (
+                <button className="btn btn-secondary btn-sm" disabled={!!busy || channel.mode !== "auto"} onClick={() => act("handback")}>
+                  {ti.handback}
+                </button>
+              ) : (
+                <button className="btn btn-sm" disabled={!!busy} onClick={() => act("takeover")}>{ti.takeover}</button>
+              )}
+            </>
           )}
+          <span className="more-wrap">
+            <button className="more-btn" aria-label={ti.moreActions} aria-haspopup="menu" aria-expanded={moreOpen}
+              onClick={(e) => { e.stopPropagation(); setMoreOpen(!moreOpen); }}>⋯</button>
+            {moreOpen && (
+              <div className="row-menu head-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                <button role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDelete(); }}>🗑 {ti.deleteConv}</button>
+              </div>
+            )}
+          </span>
         </div>
       </header>
 
-      {team && (
+      {archived && <div className="thread-archived">🗄 {ti.archivedNote}</div>}
+      {team && !archived && (
         <div className="thread-status thread-status-team">
           <strong>{ti.statusTeam}</strong>
           {thread.escalation_reason && <span> · {ti.reason}: <span dir="auto">{thread.escalation_reason}</span></span>}

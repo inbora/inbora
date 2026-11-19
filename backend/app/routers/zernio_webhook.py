@@ -178,7 +178,7 @@ def on_message_sent(payload: dict) -> str:
                                  "content": text[:8000], "attachment_url": image_url,
                                  "attachment_mime": image_mime, "external_id": msg.get("id")})[0]
     now = _now().isoformat()
-    values = {"last_message_at": now, "last_message_preview": (text or "📷")[:140]}
+    values = {"last_message_at": now, "last_message_preview": (text or "📷")[:140], "archived_at": None}
 
     last_customer = db.select_one("messages", {"select": "created_at", "thread_id": f"eq.{thread['id']}",
                                                "role": "eq.user", "order": "id.desc", "limit": "1"})

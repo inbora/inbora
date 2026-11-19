@@ -75,3 +75,21 @@ def upload_base64(b64: str, mime: str, tenant_id: str, thread_id: str) -> str:
     except (binascii.Error, ValueError):
         raise MediaError("The image could not be read")
     return upload(data, mime, tenant_id, thread_id)
+
+
+def delete_urls(urls: list[str]) -> int:
+    """Remove stored images (only ours; other links are ignored). Never raises:
+    a leftover file must not block deleting a conversation."""
+    prefix = public_url("")
+    paths = [u[len(prefix):] for u in urls if u and u.startswith(prefix)]
+    if not paths:
+        return 0
+    try:
+        res = client().request("DELETE", f"/object/{BUCKET}", json={"prefixes": paths})
+        if res.status_code >= 300:
+            print(f"[media] delete failed {res.status_code}: {res.text[:200]}")
+            return 0
+    except httpx.HTTPError as e:
+        print(f"[media] delete failed: {e}")
+        return 0
+    return len(paths)

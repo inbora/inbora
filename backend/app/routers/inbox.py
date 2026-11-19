@@ -42,13 +42,14 @@ def _note(t: dict, text: str) -> None:
 def counts(tenant_id: str = Depends(current_tenant_id)):
     rows = db.rpc("inbox_counts", {"p_tenant": tenant_id}) or [{}]
     r = rows[0] if isinstance(rows, list) else rows
-    return {"escalated": int(r.get("escalated") or 0), "unread": int(r.get("unread") or 0)}
+    return {"escalated": int(r.get("escalated") or 0), "unread": int(r.get("unread") or 0),
+            "archived": int(r.get("archived") or 0)}
 
 
 @router.get("/threads")
 def list_threads(
     tenant_id: str = Depends(current_tenant_id),
-    filter: Literal["all", "escalated", "unread", "bot"] = "all",
+    filter: Literal["all", "escalated", "unread", "bot", "archived"] = "all",
     channel: Literal["widget", "whatsapp", "instagram", "email"] | None = None,
     q: str | None = Query(default=None, max_length=100),
     days: int | None = Query(default=None, ge=1, le=3650),
@@ -256,3 +257,35 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
     if result.fallback:
         raise HTTPException(503, "The assistant couldn't write a draft. Try again in a moment.")
     return {"text": result.text}
+
+
+# ── Archive and delete
+
+class ArchiveState(BaseModel):
+    archived: bool
+
+
+@router.post("/threads/{thread_id}/archive")
+def archive(thread_id: str, body: ArchiveState, tenant_id: str = Depends(current_tenant_id)):
+    """Hide a conversation from the inbox (it comes back by itself when the
+    customer writes again). Nothing is deleted."""
+    _thread(tenant_id, thread_id)
+    db.update("threads", {"id": f"eq.{thread_id}"},
+              {"archived_at": _now() if body.archived else None, **({"unread": False} if body.archived else {})})
+    return {"archived": body.archived}
+
+
+@router.delete("/threads/{thread_id}")
+def delete_thread(thread_id: str, tenant_id: str = Depends(current_tenant_id)):
+    """Delete a conversation from Inbora for good: its messages, photos and the
+    customer's details. If they write again, it starts as a new conversation.
+    (Nothing is deleted on WhatsApp / Instagram.)"""
+    t = _thread(tenant_id, thread_id)
+    photos = [m["attachment_url"] for m in db.select("messages", {
+        "select": "attachment_url", "thread_id": f"eq.{thread_id}", "attachment_url": "not.is.null"})]
+    # The contact belongs to this one conversation (one per channel); deleting it
+    # removes the thread and its messages with it.
+    db.delete("contacts", {"id": f"eq.{t['contact_id']}", "tenant_id": f"eq.{tenant_id}"})
+    db.delete("threads", {"id": f"eq.{thread_id}"})          # in case the contact was already gone
+    removed = media.delete_urls(photos)
+    return {"deleted": True, "photos_removed": removed}
