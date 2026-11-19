@@ -8,10 +8,10 @@ import type { Channel } from "./ChannelsManager";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
-/** WhatsApp or Instagram: one-click connect (through Zernio), status,
+/** WhatsApp, Instagram or email: one-click connect (through Zernio), status,
     who answers, reconnect and disconnect — as a row that opens. */
 export default function MessagingChannelCard({ platform, channel, ready, roomLeft, maxChannels, onChanged, open, onToggle }: {
-  platform: "whatsapp" | "instagram";
+  platform: "whatsapp" | "instagram" | "email";
   channel: Channel | null;
   ready: boolean;
   roomLeft: boolean;
@@ -24,7 +24,7 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
   const c = t.channels;
   const name = t.inbox.channelNames[platform];
   const [useApp, setUseApp] = useState(true);
-  const [mode, setMode] = useState<"auto" | "human">(channel?.mode ?? "auto");
+  const [mode, setMode] = useState<"auto" | "human">(channel?.mode ?? (platform === "email" ? "human" : "auto"));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"" | "saved" | "error" | "limit">("");
 
@@ -37,7 +37,7 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
       const r = await api<{ url: string }>(`/channels/${platform}/connect`, {
         method: "POST", body: JSON.stringify({ whatsapp_app: useApp }),
       });
-      window.location.href = r.url;       // Meta's own signup / Instagram login
+      window.location.href = r.url;       // Meta's own signup / Instagram login / mailbox sign-in
     } catch (e) {
       setStatus(e instanceof ApiError && e.status === 422 ? "limit" : "error");
       onToggle(true);
@@ -79,8 +79,8 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
   const connectLabel = busy ? c.connecting : fill(c.connect, { channel: name });
   if (state === "none") {
     // WhatsApp first shows its "Business app / other number" choice;
-    // Instagram connects straight away. No room or not ready: open to explain.
-    const direct = platform === "instagram" && ready && roomLeft;
+    // Instagram and email connect straight away. No room or not ready: open to explain.
+    const direct = platform !== "whatsapp" && ready && roomLeft;
     action = open && !direct ? null : (
       <button className="btn btn-row" disabled={busy} onClick={() => (direct ? connect() : onToggle(true))}>
         {connectLabel}
@@ -101,7 +101,7 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
       pill={state === "connected" ? <span className="pill pill-on">{c.on}</span>
         : state === "error" ? <span className="pill pill-error">{c.errorPill}</span> : null}
       action={action}>
-      <p className="hint">{platform === "whatsapp" ? c.whatsappDesc : c.instagramDesc}</p>
+      <p className="hint">{platform === "whatsapp" ? c.whatsappDesc : platform === "email" ? c.emailDesc : c.instagramDesc}</p>
 
       {!ready && state === "none" && <p className="hint">{c.notReady}</p>}
 

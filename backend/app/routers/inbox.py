@@ -78,7 +78,7 @@ def get_thread(thread_id: str, after: int | None = None, mark_read: bool = True,
     """The conversation with its messages. With `after`, only newer messages
     (used for polling an open conversation)."""
     t = _thread(tenant_id, thread_id)
-    params = {"select": "id,role,content,attachment_url,attachment_mime,author_id,delivery_error,created_at",
+    params = {"select": "id,role,content,subject,attachment_url,attachment_mime,author_id,delivery_error,created_at",
               "thread_id": f"eq.{thread_id}"}
     if after is not None:
         params.update({"id": f"gt.{after}", "order": "id.asc"})
@@ -99,7 +99,7 @@ def get_thread(thread_id: str, after: int | None = None, mark_read: bool = True,
         m["author_name"] = names.get(m.pop("author_id", None) or "")
 
     contact = db.select_one("contacts", {"select": "id,name,email,phone,username,external_id", "id": f"eq.{t['contact_id']}"})
-    channel = db.select_one("channels", {"select": "id,type,mode", "id": f"eq.{t['channel_id']}"})
+    channel = db.select_one("channels", {"select": "id,type,mode,display_name", "id": f"eq.{t['channel_id']}"})
     return {"thread": t, "contact": contact, "channel": channel, "messages": msgs}
 
 
@@ -229,7 +229,7 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
     t = _thread(tenant_id, thread_id)
     _draft_rate(tenant_id)
     rows = db.select("messages", {
-        "select": "role,content,attachment_url,attachment_mime",
+        "select": "role,content,subject,attachment_url,attachment_mime",
         "thread_id": f"eq.{thread_id}", "order": "id.desc", "limit": str(history.MAX_MESSAGES),
     })
     rows.reverse()
@@ -276,16 +276,27 @@ def archive(thread_id: str, body: ArchiveState, tenant_id: str = Depends(current
 
 
 @router.delete("/threads/{thread_id}")
-def delete_thread(thread_id: str, tenant_id: str = Depends(current_tenant_id)):
+def delete_thread(thread_id: str, trash: bool = False, tenant_id: str = Depends(current_tenant_id)):
     """Delete a conversation from Inbora for good: its messages, photos and the
     customer's details. If they write again, it starts as a new conversation.
-    (Nothing is deleted on WhatsApp / Instagram.)"""
+    Nothing is deleted on WhatsApp / Instagram. For email, `trash=true` also
+    moves the conversation's emails to Trash in the business's mailbox."""
     t = _thread(tenant_id, thread_id)
     photos = [m["attachment_url"] for m in db.select("messages", {
         "select": "attachment_url", "thread_id": f"eq.{thread_id}", "attachment_url": "not.is.null"})]
+    trashing = 0
+    if trash:
+        channel = db.select_one("channels", {"select": "type,external_account_id", "id": f"eq.{t['channel_id']}"}) or {}
+        if channel.get("type") == "email" and channel.get("external_account_id"):
+            ids = [m["external_id"] for m in db.select("messages", {
+                "select": "external_id", "thread_id": f"eq.{thread_id}", "external_id": "not.is.null"})]
+            if ids:
+                jobs.enqueue("email_trash", tenant_id, {"account_id": channel["external_account_id"],
+                                                        "message_ids": ids})
+                trashing = len(ids)
     # The contact belongs to this one conversation (one per channel); deleting it
     # removes the thread and its messages with it.
     db.delete("contacts", {"id": f"eq.{t['contact_id']}", "tenant_id": f"eq.{tenant_id}"})
     db.delete("threads", {"id": f"eq.{thread_id}"})          # in case the contact was already gone
     removed = media.delete_urls(photos)
-    return {"deleted": True, "photos_removed": removed}
+    return {"deleted": True, "photos_removed": removed, "emails_to_trash": trashing}

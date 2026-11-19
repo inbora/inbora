@@ -1,5 +1,5 @@
 """The business's channels: website chat (Step 4), WhatsApp and Instagram
-through Zernio (Step 5). Email (Unipile) comes in Step 6."""
+(Step 5) and email (Step 6), the last three through Zernio."""
 import re
 import secrets
 from datetime import datetime, timezone
@@ -104,31 +104,49 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
     return _out(changed[0])
 
 
-# ── WhatsApp and Instagram (Zernio)
+# ── WhatsApp, Instagram and email (Zernio)
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def _display_name(platform: str, account: dict) -> str:
+    if platform == "email":
+        return _account_email(account)[:120]
     name = account.get("username") or account.get("displayName") or ""
     if platform == "instagram" and name and not name.startswith("@"):
         name = "@" + name
     return name[:120]
 
 
+def _account_email(account: dict) -> str:
+    for k in ("email", "username", "displayName"):
+        v = (account.get(k) or "").strip().lower()
+        if "@" in v:
+            return v
+    return (account.get("username") or account.get("displayName") or "").strip()
+
+
 def upsert_messaging_channel(tenant_id: str, platform: str, account: dict) -> dict:
-    """Save (or refresh) the business's WhatsApp / Instagram channel after a
-    successful connect. Used by the connect callback and the account.connected
-    webhook, whichever arrives first."""
+    """Save (or refresh) the business's WhatsApp / Instagram / email channel
+    after a successful connect. Used by the connect callback and the
+    account.connected webhook, whichever arrives first."""
     account_id = account.get("accountId") or account.get("_id") or account.get("id")
     existing = db.select_one("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}", "type": f"eq.{platform}",
                                           "order": "created_at.desc", "limit": "1"})
     values = {"external_account_id": account_id, "display_name": _display_name(platform, account),
               "status": "connected", "updated_at": _now()}
+    if platform == "email":
+        cfg = dict((existing or {}).get("config") or {})
+        cfg["email"] = _account_email(account)
+        if (existing or {}).get("external_account_id") != account_id or (existing or {}).get("status") != "connected":
+            cfg["email_since"] = _now()      # read new mail only, from now on
+        values["config"] = cfg
     if existing:
         return db.update("channels", {"id": f"eq.{existing['id']}"}, values)[0]
-    return db.insert("channels", {"tenant_id": tenant_id, "type": platform, "mode": "auto", **values})[0]
+    # Email starts with the team answering (the agent can draft); chats start with the agent.
+    mode = "human" if platform == "email" else "auto"
+    return db.insert("channels", {"tenant_id": tenant_id, "type": platform, "mode": mode, **values})[0]
 
 
 class ConnectRequest(BaseModel):
@@ -136,11 +154,13 @@ class ConnectRequest(BaseModel):
     whatsapp_app: bool = True
 
 
+Platform = Literal["whatsapp", "instagram", "email"]
+
+
 @router.post("/{platform}/connect")
-def connect(platform: Literal["whatsapp", "instagram"], body: ConnectRequest,
-            tenant_id: str = Depends(current_tenant_id)):
+def connect(platform: Platform, body: ConnectRequest, tenant_id: str = Depends(current_tenant_id)):
     """Start the one-click connect: returns the link to open (Meta's own
-    WhatsApp signup or Instagram login, run through Zernio)."""
+    WhatsApp signup, Instagram login, or the mailbox sign-in, run through Zernio)."""
     if not zernio.configured():
         raise HTTPException(503, detail={"code": "not_configured"})
     rows = db.select("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}"})
@@ -156,7 +176,7 @@ def connect(platform: Literal["whatsapp", "instagram"], body: ConnectRequest,
         url = zernio.connect_url(
             platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
             whatsapp_app=body.whatsapp_app,
-            reconnect_account_id=(mine or {}).get("external_account_id") if platform == "instagram" else None)
+            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None)
     except zernio.ZernioError as e:
         print(f"[channels] connect {platform} failed: {e.status} {e.message}")
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
@@ -165,34 +185,35 @@ def connect(platform: Literal["whatsapp", "instagram"], body: ConnectRequest,
 
 class CompleteRequest(BaseModel):
     account_id: str = Field(max_length=100)
-    profile_id: str = Field(max_length=100)
+    # The mailbox sign-in doesn't send it back; the business's own profile is used.
+    profile_id: str | None = Field(default=None, max_length=100)
 
 
 @router.post("/{platform}/complete")
-def complete(platform: Literal["whatsapp", "instagram"], body: CompleteRequest,
-             tenant_id: str = Depends(current_tenant_id)):
+def complete(platform: Platform, body: CompleteRequest, tenant_id: str = Depends(current_tenant_id)):
     """The browser came back from the connect flow. Check with Zernio that the
     account really belongs to this business before saving it."""
     tenant = db.select_one("tenants", {"select": "zernio_profile_id", "id": f"eq.{tenant_id}"}) or {}
-    if not tenant.get("zernio_profile_id") or tenant["zernio_profile_id"] != body.profile_id:
+    profile_id = tenant.get("zernio_profile_id")
+    if not profile_id or (body.profile_id and body.profile_id != profile_id):
         raise HTTPException(403, "This account belongs to another business")
     try:
-        account = zernio.find_account(body.profile_id, body.account_id)
+        account = zernio.find_account(profile_id, body.account_id)
     except zernio.ZernioError as e:
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
-    if not account or (account.get("platform") or platform) != platform:
+    if not account or (zernio.channel_type(account.get("platform")) or platform) != platform:
         raise HTTPException(404, "Account not found")
     return _out(upsert_messaging_channel(tenant_id, platform, account))
 
 
 @router.post("/{channel_id}/disconnect")
 def disconnect(channel_id: str, tenant_id: str = Depends(current_tenant_id)):
-    """Disconnect WhatsApp / Instagram: removes it from Zernio too (so it stops
-    costing anything) and keeps the conversations."""
+    """Disconnect WhatsApp / Instagram / email: removes it from Zernio too (so
+    it stops costing anything) and keeps the conversations."""
     ch = db.select_one("channels", {"select": "*", "id": f"eq.{channel_id}", "tenant_id": f"eq.{tenant_id}"})
     if ch is None:
         raise HTTPException(404, "Channel not found")
-    if ch["type"] in zernio.PLATFORMS and ch.get("external_account_id"):
+    if ch["type"] in zernio.CHANNEL_TYPES and ch.get("external_account_id"):
         try:
             zernio.delete_account(ch["external_account_id"])
         except zernio.ZernioError as e:

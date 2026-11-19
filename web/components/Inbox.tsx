@@ -35,7 +35,11 @@ type Message = {
   attachment_url?: string | null;
   attachment_mime?: string | null;
   delivery_error?: string | null;
+  subject?: string | null;
 };
+
+/** "Re: Order #1001" and "Order #1001" are the same email subject. */
+const baseSubject = (s?: string | null) => (s || "").replace(/^\s*((re|fwd?|aw|sv)\s*:\s*)+/i, "").trim().toLowerCase();
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -103,7 +107,9 @@ export default function Inbox() {
   const [counts, setCounts] = useState({ escalated: 0, unread: 0, archived: 0 });
   const [view, setView] = useState<View>("inbox");
   const [menuFor, setMenuFor] = useState<string | null>(null);       // row whose ⋯ menu is open
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // The conversation to delete; email ones offer to move the emails to Trash too.
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; email: boolean } | null>(null);
+  const [trashToo, setTrashToo] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // Close a row menu on any click outside it.
@@ -202,8 +208,9 @@ export default function Inbox() {
     if (!confirmDelete) return;
     setDeleting(true);
     try {
-      await api(`/inbox/threads/${confirmDelete}`, { method: "DELETE" });
-      dropFromList(confirmDelete);
+      const trash = confirmDelete.email && trashToo ? "?trash=true" : "";
+      await api(`/inbox/threads/${confirmDelete.id}${trash}`, { method: "DELETE" });
+      dropFromList(confirmDelete.id);
       setConfirmDelete(null);
       refresh();
     } finally {
@@ -290,7 +297,7 @@ export default function Inbox() {
                 <button role="menuitem" onClick={() => setArchived(th.id, view !== "archived")}>
                   {view === "archived" ? `↩ ${ti.unarchive}` : `🗄 ${ti.archive}`}
                 </button>
-                <button role="menuitem" className="danger" onClick={() => { setMenuFor(null); setConfirmDelete(th.id); }}>
+                <button role="menuitem" className="danger" onClick={() => { setMenuFor(null); setTrashToo(false); setConfirmDelete({ id: th.id, email: th.channel_type === "email" }); }}>
                   🗑 {ti.deleteConv}
                 </button>
               </div>
@@ -314,7 +321,7 @@ export default function Inbox() {
         {selected ? (
           <ThreadView key={selected} id={selected} onBack={() => open(null)} onChanged={refresh}
             onRead={(unread) => markRead(selected, unread)} visible={visible}
-            onArchive={(archived) => setArchived(selected, archived)} onDelete={() => setConfirmDelete(selected)} />
+            onArchive={(archived) => setArchived(selected, archived)} onDelete={(email) => { setTrashToo(false); setConfirmDelete({ id: selected, email }); }} />
         ) : (
           <div className="thread-empty">{ti.pick}</div>
         )}
@@ -325,6 +332,12 @@ export default function Inbox() {
           <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="del-title" onClick={(e) => e.stopPropagation()}>
             <h3 id="del-title">{ti.deleteTitle}</h3>
             <p>{ti.deleteBody}</p>
+            {confirmDelete.email && (
+              <label className="check del-trash">
+                <input type="checkbox" checked={trashToo} disabled={deleting} onChange={(e) => setTrashToo(e.target.checked)} />
+                {ti.deleteTrash}
+              </label>
+            )}
             <div className="actions">
               <button className="btn btn-secondary btn-sm" disabled={deleting} onClick={() => setConfirmDelete(null)}>{ti.cancel}</button>
               <button className="btn btn-sm btn-danger" disabled={deleting} onClick={deleteThread}>{ti.deleteConfirm}</button>
@@ -364,7 +377,7 @@ function when(ts: string, lang: string) {
 
 function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelete }: {
   id: string; onBack: () => void; onChanged: () => void; onRead: (unread: boolean) => void; visible: boolean;
-  onArchive: (archived: boolean) => void; onDelete: () => void;
+  onArchive: (archived: boolean) => void; onDelete: (email: boolean) => void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
@@ -518,6 +531,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
   const name = who.name;
   const igUser = channel.type === "instagram" && contact.username ? contact.username.replace(/^@/, "") : null;
   let lastDay = "";
+  let lastSubject = "";
 
   return (
     <div className="thread">
@@ -557,7 +571,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
               onClick={(e) => { e.stopPropagation(); setMoreOpen(!moreOpen); }}>⋯</button>
             {moreOpen && (
               <div className="row-menu head-menu" role="menu" onClick={(e) => e.stopPropagation()}>
-                <button role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDelete(); }}>🗑 {ti.deleteConv}</button>
+                <button role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDelete(channel.type === "email"); }}>🗑 {ti.deleteConv}</button>
               </div>
             )}
           </span>
@@ -578,6 +592,12 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}>
         {messages.map((m) => {
+          // An email's subject, shown when it changes (not on every reply).
+          let subject: string | null = null;
+          if (m.subject && baseSubject(m.subject) !== lastSubject) {
+            subject = m.subject;
+            lastSubject = baseSubject(m.subject);
+          }
           const day = new Date(m.created_at).toDateString();
           const sep = day !== lastDay ? (lastDay = day, (
             <div key={`d${m.id}`} className="day-sep">{new Date(m.created_at).toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })}</div>
@@ -595,6 +615,7 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
                   <img src={m.attachment_url} alt="" loading="lazy" />
                 </a>
               )}
+              {subject && <div className="msg-subject" dir="auto">{subject}</div>}
               {m.content && <div className="msg-text" dir="auto">{m.content}</div>}
               {m.delivery_error && <div className="msg-error">{deliveryText(m.delivery_error, ti)}</div>}
               <div className="msg-time">{new Date(m.created_at).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" })}</div>

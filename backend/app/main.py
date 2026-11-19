@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.6.0", lifespan=lifespan)
 
 
 class SplitCORS:
@@ -48,7 +48,7 @@ def health():
         "status": "ok",
         "database": "ok" if ok else "unreachable",
         "agent": "ok" if settings.gemini_api_key else "missing GEMINI_API_KEY",
-        "whatsapp_instagram": "ok" if (settings.zernio_api_key and settings.zernio_webhook_secret)
+        "whatsapp_instagram_email": "ok" if (settings.zernio_api_key and settings.zernio_webhook_secret)
                               else "missing ZERNIO_API_KEY / ZERNIO_WEBHOOK_SECRET",
     }
     if not ok:

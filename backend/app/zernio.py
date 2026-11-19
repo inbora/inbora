@@ -1,5 +1,5 @@
-"""Zernio API: WhatsApp and Instagram for every business, through one Zernio
-account (Inbora's). Each business gets its own Zernio profile, tagged with
+"""Zernio API: WhatsApp, Instagram and email for every business, through one
+Zernio account (Inbora's). Each business gets its own Zernio profile, tagged with
 externalId = our tenant id, so webhooks can be routed back to it."""
 import hashlib
 import hmac
@@ -12,6 +12,19 @@ from . import db
 from .config import get_settings
 
 PLATFORMS = ("whatsapp", "instagram")
+# A connected mailbox is a Zernio account on one of these platforms; in
+# Inbora it is a channel of type "email".
+EMAIL_PLATFORMS = ("google", "microsoft", "imap")
+CHANNEL_TYPES = PLATFORMS + ("email",)
+
+
+def channel_type(platform: str | None) -> str | None:
+    """Zernio account platform -> our channel type."""
+    if platform in PLATFORMS:
+        return platform
+    if platform in EMAIL_PLATFORMS or platform == "email":
+        return "email"
+    return None
 
 _client: httpx.Client | None = None
 
@@ -108,8 +121,11 @@ def connect_url(platform: str, profile_id: str, redirect_url: str, *,
         params["loginMethod"] = "instagram_login"   # no Facebook Page needed
         if reconnect_account_id:
             params["reconnectAccountId"] = reconnect_account_id
+    elif platform == "email" and reconnect_account_id:
+        # One hosted page for Gmail, Outlook and any other mailbox (IMAP).
+        params["reconnectAccountId"] = reconnect_account_id
     body = _call("GET", f"/connect/{platform}", params=params)
-    url = body.get("authUrl")
+    url = body.get("authUrl") or body.get("url")
     if not url:
         raise ZernioError(502, "Zernio did not return a connect link")
     return url
@@ -147,11 +163,15 @@ def send_message(conversation_id: str, account_id: str, text: str = "", *,
     return _call("POST", f"/inbox/conversations/{conversation_id}/messages", json=payload, headers=headers)
 
 
+def needs_key(url: str) -> bool:
+    return "zernio.com" in url or url.startswith(get_settings().zernio_api_base.rstrip("/"))
+
+
 def fetch_media(url: str) -> tuple[bytes, str] | None:
-    """Download an attachment. WhatsApp media on zernio.com needs our API key;
-    Instagram media is a public CDN link."""
+    """Download an attachment. WhatsApp media and email attachments on
+    zernio.com need our API key; Instagram media is a public CDN link."""
     headers = {}
-    if "zernio.com" in url and configured():
+    if needs_key(url) and configured():
         headers["Authorization"] = f"Bearer {get_settings().zernio_api_key}"
     try:
         res = httpx.get(url, headers=headers, timeout=30, follow_redirects=True)
@@ -163,6 +183,66 @@ def fetch_media(url: str) -> tuple[bytes, str] | None:
         print(f"[zernio] media fetch {res.status_code} for {url[:80]}")
         return None
     return res.content, mime
+
+
+# ── Email
+
+def _unwrap(body: dict, key: str) -> dict:
+    inner = body.get(key) if isinstance(body.get(key), dict) else body.get("data")
+    return inner if isinstance(inner, dict) else body
+
+
+def get_email(message_id: str, account_id: str) -> dict[str, Any]:
+    """One email with its text, the new part only (`clean`) and its headers."""
+    body = _call("GET", f"/email/messages/{message_id}",
+                 params={"accountId": account_id, "clean": "true", "includeHeaders": "true"})
+    return _unwrap(body, "message")
+
+
+def list_emails(account_id: str, after: str | None = None, limit: int = 25) -> list[dict[str, Any]]:
+    """Newest emails first (no bodies)."""
+    params: dict[str, Any] = {"accountId": account_id, "limit": limit, "sortOrder": "desc"}
+    if after:
+        params["after"] = after
+    body = _call("GET", "/email/messages", params=params)
+    for key in ("messages", "data", "items"):
+        if isinstance(body.get(key), list):
+            return body[key]
+    return []
+
+
+def reply_email(message_id: str, account_id: str, to: list[dict], subject: str, text: str, *,
+                attachments: list[dict] | None = None, key: str | None = None) -> dict[str, Any]:
+    """Answer inside the customer's thread; the provider adds the quoted original."""
+    payload: dict[str, Any] = {"accountId": account_id, "to": to, "subject": subject,
+                               "text": text or " ", "mode": "reply"}
+    if attachments:
+        payload["attachments"] = attachments
+    headers = {"Idempotency-Key": key} if key else {}
+    return _unwrap(_call("POST", f"/email/messages/{message_id}/reply", json=payload, headers=headers), "message")
+
+
+def send_email(account_id: str, to: list[dict], subject: str, text: str, *,
+               attachments: list[dict] | None = None, key: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"accountId": account_id, "to": to, "subject": subject, "text": text or " "}
+    if attachments:
+        payload["attachments"] = attachments
+    headers = {"Idempotency-Key": key} if key else {}
+    return _unwrap(_call("POST", "/email/messages", json=payload, headers=headers), "message")
+
+
+def trash_email(message_id: str, account_id: str) -> None:
+    try:
+        _call("DELETE", f"/email/messages/{message_id}", params={"accountId": account_id})
+    except ZernioError as e:
+        if e.status != 404:
+            raise
+
+
+def email_attachment_url(attachment_id: str, account_id: str, message_id: str) -> str:
+    from urllib.parse import urlencode
+    base = get_settings().zernio_api_base.rstrip("/")
+    return f"{base}/email/attachments/{attachment_id}?" + urlencode({"accountId": account_id, "messageId": message_id})
 
 
 # ── Webhooks
@@ -179,6 +259,12 @@ def verify_signature(raw_body: bytes, signature: str) -> bool:
 def friendly_error(err: ZernioError, platform: str) -> str:
     """A delivery error the team can act on."""
     text = (err.message or "").lower()
+    if platform == "email":
+        if err.status == 429 or "send_cap" in (err.code or ""):
+            return "error: The mailbox reached its daily sending limit. Try again tomorrow."
+        if err.status in (401, 403) or "disconnect" in text or "scope" in text or "token" in text:
+            return "disconnected: The mailbox is disconnected. Reconnect it on the Channels page."
+        return f"error: {err.message[:200] or 'Sending failed'}"
     if any(k in text for k in ("24", "window", "re-engagement", "outside", "131047")):
         return ("window_closed: The customer hasn't written in the last 24 hours, so "
                 f"{'WhatsApp' if platform == 'whatsapp' else 'Instagram'} doesn't allow a reply until they write again.")

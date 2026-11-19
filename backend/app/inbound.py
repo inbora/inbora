@@ -61,6 +61,7 @@ def receive_message(
     attachment_mime: str | None = None,
     external_message_id: str | None = None,
     external_thread_id: str | None = None,
+    subject: str | None = None,
     auto_reply: bool = True,
 ) -> dict[str, Any]:
     """Store a customer's message and, if the agent should answer, queue it.
@@ -73,8 +74,10 @@ def receive_message(
         "tenant_id": channel["tenant_id"], "thread_id": thread["id"], "role": "user",
         "content": (text or "")[:8000], "attachment_url": attachment_url,
         "attachment_mime": attachment_mime, "external_id": external_message_id,
+        **({"subject": subject[:300]} if subject else {}),
     })[0]
-    preview = (text or "").strip()[:140] or ("📷" if (attachment_mime or "").startswith("image/") else "[attachment]")
+    preview = ((text or "").strip() or (subject or "").strip())[:140] \
+        or ("📷" if (attachment_mime or "").startswith("image/") else "[attachment]")
     # (archived_at = None: an archived conversation comes back to the inbox)
     db.update("threads", {"id": f"eq.{thread['id']}"},
               {"unread": True, "last_message_at": _now(), "last_message_preview": preview, "archived_at": None})

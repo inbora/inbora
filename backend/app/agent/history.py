@@ -7,9 +7,10 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def _fetch_image(url: str) -> tuple[bytes, str] | None:
+    from .. import zernio
+    from ..config import get_settings
     headers = {}
-    if "zernio.com" in url:
-        from ..config import get_settings
+    if zernio.needs_key(url):
         headers["Authorization"] = f"Bearer {get_settings().zernio_api_key}"
     try:
         res = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
@@ -46,6 +47,8 @@ def build(messages: list[dict]) -> list[types.Content]:
             if img:
                 parts.append(types.Part.from_bytes(data=img[0], mime_type=img[1]))
         text = (m.get("content") or "").strip()
+        if m.get("subject") and m["role"] == "user":
+            text = f"Subject: {m['subject']}\n\n{text}".strip()
         if not text and m.get("attachment_url") and i != last_img:
             text = "[the customer sent an attachment]"
         if text:

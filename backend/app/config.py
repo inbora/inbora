@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     zernio_api_key: str = ""
     zernio_webhook_secret: str = ""
     zernio_api_base: str = "https://zernio.com/api/v1"
+    # Email (Step 6): new mail arrives by webhook; every mailbox is also read
+    # this often, to catch anything a webhook missed. 0 = never.
+    email_poll_seconds: int = 180
 
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True

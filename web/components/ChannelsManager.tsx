@@ -52,21 +52,22 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
     setData(await api<ChannelsData>("/channels"));
   }
 
-  // Back from WhatsApp signup / Instagram login: save the account (the server
-  // checks with Zernio that it belongs to this business), then clean the URL.
+  // Back from WhatsApp signup / Instagram login / mailbox sign-in: save the
+  // account (the server checks with Zernio that it belongs to this business),
+  // then clean the URL.
   useEffect(() => {
     const platform = params.get("connect");
-    if (handled.current || (platform !== "whatsapp" && platform !== "instagram")) return;
+    if (handled.current || (platform !== "whatsapp" && platform !== "instagram" && platform !== "email")) return;
     handled.current = true;
     const label = t.inbox.channelNames[platform];
     const accountId = params.get("accountId");
     const profileId = params.get("profileId");
-    const error = params.get("error");
+    const error = params.get("error") || (params.get("status") === "error" ? "failed" : null);
     (async () => {
-      if (accountId && profileId && !error) {
+      if (accountId && (profileId || platform === "email") && !error) {
         try {
           await api(`/channels/${platform}/complete`, {
-            method: "POST", body: JSON.stringify({ account_id: accountId, profile_id: profileId }),
+            method: "POST", body: JSON.stringify({ account_id: accountId, profile_id: profileId || undefined }),
           });
           await reload();
           setNotice({ ok: true, text: fill(c.connectedOk, { channel: label }) });
@@ -82,7 +83,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
-  function messagingChannel(platform: "whatsapp" | "instagram") {
+  function messagingChannel(platform: "whatsapp" | "instagram" | "email") {
     return data.channels.find((x) => x.type === platform && x.status !== "disconnected") ?? null;
   }
 
@@ -196,7 +197,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
           )}
         </ChannelRow>
 
-        {(["whatsapp", "instagram"] as const).map((p) => {
+        {(["whatsapp", "instagram", "email"] as const).map((p) => {
           const ch = messagingChannel(p);
           return (
             <MessagingChannelCard key={`${p}-${ch?.id ?? "none"}-${ch?.status ?? ""}`} platform={p} channel={ch}
@@ -204,9 +205,6 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
               open={openRow === p} onToggle={(force) => toggle(p, force)} />
           );
         })}
-
-        <ChannelRow kind="email" name={t.inbox.channelNames.email} className="channel-email" open={false}
-          action={<span className="step">{fill(c.comingStep, { n: 6 })}</span>} />
       </div>
     </>
   );

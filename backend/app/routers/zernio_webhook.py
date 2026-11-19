@@ -1,4 +1,4 @@
-"""Events from Zernio: WhatsApp and Instagram messages, and account changes.
+"""Events from Zernio: WhatsApp, Instagram and email messages, and account changes.
 
 One webhook endpoint for every business. Each event names the Zernio profile
 it belongs to (profiles[].externalId = our tenant id) and the account
@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from .. import alerts, db, inbound, jobs, zernio
+from .. import alerts, db, email_in, inbound, jobs, zernio
 from .channels import upsert_messaging_channel
 
 router = APIRouter()
@@ -79,7 +79,7 @@ def _channel(payload: dict) -> dict | None:
         return None
     ch = db.select_one("channels", {"select": "*", "external_account_id": f"eq.{account_id}",
                                     "status": "neq.disconnected", "order": "created_at.desc", "limit": "1"})
-    if ch is None or ch["type"] not in zernio.PLATFORMS:
+    if ch is None or ch["type"] not in zernio.CHANNEL_TYPES:
         return None
     tenants = _tenant_ids(payload)
     if tenants and ch["tenant_id"] not in tenants:     # never cross businesses
@@ -121,6 +121,9 @@ def on_message_received(payload: dict) -> str:
     ch = _channel(payload)
     if ch is None:
         return "no-channel"
+    if ch["type"] == "email":
+        mid = email_in.message_id_from_webhook(payload)
+        return email_in.ingest(ch, mid, email_in.hint_from_webhook(payload)) if mid else "no-message-id"
     msg = payload.get("message") or {}
     if (msg.get("platform") or ch["type"]) != ch["type"]:
         return "platform-mismatch"
@@ -163,6 +166,10 @@ def on_message_sent(payload: dict) -> str:
     ch = _channel(payload)
     if ch is None:
         return "no-channel"
+    if ch["type"] == "email":
+        # Someone answered from the mailbox itself (Gmail, Outlook...).
+        mid = email_in.message_id_from_webhook(payload)
+        return email_in.sent_from_mailbox(ch, mid, email_in.hint_from_webhook(payload)) if mid else "no-message-id"
     pid, name, _, username = _participant(payload)
     if not pid:
         return "no-participant"
@@ -203,14 +210,14 @@ def on_message_sent(payload: dict) -> str:
 
 def on_account_connected(payload: dict) -> str:
     acc = payload.get("account") or {}
-    platform = acc.get("platform")
+    kind = zernio.channel_type(acc.get("platform"))
     tenants = _tenant_ids(payload)
-    if platform not in zernio.PLATFORMS or len(tenants) != 1:
+    if kind is None or len(tenants) != 1:
         return "ignored"
     tenant_id = next(iter(tenants))
     if not db.select_one("tenants", {"select": "id", "id": f"eq.{tenant_id}"}):
         return "unknown-tenant"
-    upsert_messaging_channel(tenant_id, platform, acc)
+    upsert_messaging_channel(tenant_id, kind, acc)
     return "channel-saved"
 
 

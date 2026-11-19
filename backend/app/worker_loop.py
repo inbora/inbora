@@ -8,7 +8,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import alerts, channels, db, jobs, media, zernio
+from . import alerts, channels, db, email_in, jobs, media, zernio
 from .agent import context, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
@@ -36,7 +36,7 @@ def handle_reply(payload: dict) -> str:
         return "channel-manual"
 
     rows = db.select("messages", {
-        "select": "role,content,attachment_url,attachment_mime",
+        "select": "role,content,subject,attachment_url,attachment_mime",
         "thread_id": f"eq.{thread_id}", "order": "id.desc", "limit": str(history.MAX_MESSAGES),
     })
     rows.reverse()
@@ -77,8 +77,8 @@ def handle_reply(payload: dict) -> str:
 
 
 def handle_media(payload: dict) -> str:
-    """Copy an image from WhatsApp / Instagram into our storage, so the inbox
-    can show it and the link doesn't expire."""
+    """Copy an image from WhatsApp / Instagram / email into our storage, so the
+    inbox can show it and the link doesn't expire."""
     msg = db.select_one("messages", {"select": "id,tenant_id,thread_id,attachment_url",
                                      "id": f"eq.{payload['message_id']}"})
     if msg is None or msg.get("attachment_url") != payload.get("url"):
@@ -113,7 +113,7 @@ def _on_final_failure(job: dict, error: str) -> None:
 
 
 HANDLERS = {"reply": handle_reply, "alert": alerts.handle_alert, "media": handle_media,
-            "channel_alert": alerts.handle_channel_alert}
+            "channel_alert": alerts.handle_channel_alert, "email_trash": email_in.handle_trash}
 
 
 def process(job: dict) -> None:
@@ -139,9 +139,15 @@ def run_forever(stop: threading.Event | None = None) -> None:
     s = get_settings()
     stop = stop or threading.Event()
     last_purge = 0.0
+    last_poll, polling = time.time(), None
     print(f"[worker] started (concurrency {s.worker_concurrency})", flush=True)
     with ThreadPoolExecutor(max_workers=s.worker_concurrency) as pool:
         while not stop.is_set():
+            # Read new mail in every mailbox now and then, in case a webhook was missed.
+            if (s.email_poll_seconds > 0 and time.time() - last_poll > s.email_poll_seconds
+                    and (polling is None or polling.done())):
+                last_poll = time.time()
+                polling = pool.submit(email_in.poll_all)
             try:
                 batch = jobs.claim(s.worker_concurrency)
             except Exception as e:  # noqa: BLE001 — database blip: wait and retry
