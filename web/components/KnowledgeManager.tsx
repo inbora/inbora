@@ -88,13 +88,14 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
       await reload();
     });
 
-  // Live counter for the editor.
+  // What's left of the plan's limit while writing (other switched-on articles + this one).
   const draftSize = draft ? draft.title.trim().length + draft.body.trim().length : 0;
   const othersUsed = data.articles
     .filter((a) => a.enabled && a.id !== draft?.id)
     .reduce((n, a) => n + a.char_count, 0);
-  const after = othersUsed + (draft?.enabled ? draftSize : 0);
-  const draftOver = !!draft?.enabled && after > data.limit;
+  const remaining = data.limit - othersUsed - draftSize;
+  // A switched-off article (draft) can be any size; it only counts once switched on.
+  const draftOver = !!draft?.enabled && remaining < 0;
 
   const pct = data.limit ? Math.min(100, Math.round((data.used / data.limit) * 100)) : 0;
 
@@ -165,19 +166,12 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
               onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
             <span className="hint">{k.bodyHint}</span>
           </div>
-          <label className="check">
-            <input type="checkbox" checked={draft.enabled}
-              onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
-            {k.enabled}
-          </label>
-          <div className={`hint counter${draftOver ? " counter-over" : ""}`}>
-            {k.thisArticle}: {nf.format(draftSize)} · {k.afterSave}: {nf.format(after)} / {nf.format(data.limit)} {k.characters}
+          <div className={`remaining${remaining < 0 ? " remaining-over" : ""}`}>
+            {remaining >= 0
+              ? k.remaining.replace("{n}", nf.format(remaining))
+              : k.overBy.replace("{n}", nf.format(-remaining))}
           </div>
-          {draftOver && (
-            <div className="alert alert-warn">
-              {k.overLimit.replace("{limit}", nf.format(data.limit)).replace("{used}", nf.format(othersUsed))}
-            </div>
-          )}
+          {draftOver && <div className="alert alert-warn">{k.overLimitEdit}</div>}
           <div className="actions">
             <button className="btn btn-secondary" onClick={() => { setDraft(null); setError(""); }}>{k.cancel}</button>
             <button className="btn" disabled={busy || !draft.title.trim() || draftOver} onClick={save}>{k.save}</button>

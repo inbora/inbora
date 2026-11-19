@@ -192,8 +192,8 @@ select.lang {
 
 /* ── Knowledge ──────────────────────────────────── */
 .meter-full { background: var(--danger) !important; }
-.counter { margin: 4px 0 12px; }
-.counter-over { color: var(--danger); font-weight: 600; }
+.remaining { font-size: 13px; color: var(--muted); margin: -6px 0 12px; text-align: end; }
+.remaining-over { color: var(--danger); font-weight: 600; }
 .editor { border-color: var(--accent); }
 .article-list { display: flex; flex-direction: column; }
 .article { display: flex; gap: 16px; align-items: flex-start; padding: 16px 20px; margin-bottom: 10px; }

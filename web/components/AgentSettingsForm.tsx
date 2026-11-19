@@ -4,12 +4,16 @@ import { useState } from "react";
 import { api } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
+type Lang = "en" | "he" | "ar";
+type Texts = { greeting: string; escalation_message: string };
+
 export type AgentSettings = {
   instructions: string;
   tone: "friendly" | "professional" | "casual" | "formal";
-  default_language: "en" | "he" | "ar";
+  default_language: Lang;
   greeting: string;
   escalation_message: string;
+  defaults: Record<Lang, Texts>;
 };
 
 const TONES = ["friendly", "professional", "casual", "formal"] as const;
@@ -24,6 +28,18 @@ export default function AgentSettingsForm({ initial }: { initial: AgentSettings 
     setForm({ ...form, [key]: v });
     setStatus("");
   };
+
+  // Changing the language swaps the greeting and hand-off message to the new
+  // language's defaults — but only the ones still exactly at the old default
+  // (or empty). Texts the business wrote itself are kept.
+  function changeLanguage(next: Lang) {
+    const before = form.defaults[form.default_language];
+    const after = form.defaults[next];
+    const swap = (field: keyof Texts) =>
+      !form[field].trim() || form[field].trim() === before[field] ? after[field] : form[field];
+    setForm({ ...form, default_language: next, greeting: swap("greeting"), escalation_message: swap("escalation_message") });
+    setStatus("");
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -57,7 +73,7 @@ export default function AgentSettingsForm({ initial }: { initial: AgentSettings 
         <div className="field">
           <label htmlFor="ag-lang">{s.language}</label>
           <select id="ag-lang" value={form.default_language}
-            onChange={(e) => set("default_language", e.target.value as AgentSettings["default_language"])}>
+            onChange={(e) => changeLanguage(e.target.value as Lang)}>
             <option value="en">English</option>
             <option value="he">עברית</option>
             <option value="ar">العربية</option>

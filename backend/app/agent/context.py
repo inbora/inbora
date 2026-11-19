@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 
 from .. import db
+from ..agent_defaults import default_for
 
 LANG_NAMES = {"en": "English", "he": "Hebrew", "ar": "Arabic"}
 
@@ -44,14 +45,16 @@ def load(tenant_id: str) -> TenantContext:
         "order": "sort_order.asc,created_at.asc",
     })
     limit = int(((sub or {}).get("limits") or {}).get("kb_char_limit") or 20000)
+    lang = settings.get("default_language") or tenant.get("default_language") or "en"
     return TenantContext(
         tenant_id=tenant_id,
         business_name=tenant["name"],
-        default_language=settings.get("default_language") or tenant.get("default_language") or "en",
+        default_language=lang,
         instructions=(settings.get("instructions") or "").strip(),
         tone=(settings.get("tone") or "friendly").strip(),
-        greeting=settings.get("greeting"),
-        escalation_message=(settings.get("escalation_message") or "").strip() or None,
+        greeting=(settings.get("greeting") or "").strip() or default_for(lang, "greeting"),
+        escalation_message=(settings.get("escalation_message") or "").strip()
+                           or default_for(lang, "escalation_message"),
         articles=[Article(r["title"], r["body"] or "") for r in rows],
         kb_char_limit=limit,
     )
