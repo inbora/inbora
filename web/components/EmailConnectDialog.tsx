@@ -6,7 +6,7 @@ import { useI18n } from "@/lib/i18n/client";
 
 type Discovery = {
   email: string;
-  route: "google_oauth" | "microsoft_oauth" | "imap" | "unsupported";
+  route: "google_oauth" | "microsoft_oauth" | "imap" | "unsupported" | "hosted";
   provider: string | null;
   password_kind: "app_password" | "password" | "oauth" | null;
   help_url: string | null;
@@ -49,10 +49,11 @@ export default function EmailConnectDialog({ initialEmail, onClose, onConnected 
     try {
       const d = await api<Discovery>("/channels/email/discover", { method: "POST", body: JSON.stringify({ email: address }) });
       setEmail(d.email);
-      if (d.route === "google_oauth" || d.route === "microsoft_oauth") {
+      if (d.route === "google_oauth" || d.route === "microsoft_oauth" || d.route === "hosted") {
+        // hosted = a mailbox type we can't tell: Zernio's own page, address filled in.
         setBusy("redirect");
         const r = await api<{ url: string }>("/channels/email/connect", {
-          method: "POST", body: JSON.stringify({ email: d.email, route: d.route }),
+          method: "POST", body: JSON.stringify({ email: d.email, route: d.route === "hosted" ? null : d.route }),
         });
         window.location.href = r.url;           // Google's / Microsoft's own sign-in
         return;

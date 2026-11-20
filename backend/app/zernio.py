@@ -111,7 +111,8 @@ def ensure_profile(tenant_id: str) -> str:
 # ── Connecting accounts
 
 def connect_url(platform: str, profile_id: str, redirect_url: str, *,
-                whatsapp_app: bool = True, reconnect_account_id: str | None = None) -> str:
+                whatsapp_app: bool = True, reconnect_account_id: str | None = None,
+                email: str | None = None, name: str | None = None) -> str:
     params: dict[str, str] = {"profileId": profile_id, "redirect_url": redirect_url}
     if platform == "whatsapp":
         # business_app = the number keeps working in the WhatsApp Business app
@@ -121,9 +122,15 @@ def connect_url(platform: str, profile_id: str, redirect_url: str, *,
         params["loginMethod"] = "instagram_login"   # no Facebook Page needed
         if reconnect_account_id:
             params["reconnectAccountId"] = reconnect_account_id
-    elif platform == "email" and reconnect_account_id:
-        # One hosted page for Gmail, Outlook and any other mailbox (IMAP).
-        params["reconnectAccountId"] = reconnect_account_id
+    elif platform == "email":
+        # Zernio's own page (fallback when our window can't tell the mailbox
+        # type): address and sender name filled in, so it skips those screens.
+        if email:
+            params["email"] = email
+        if name:
+            params["name"] = name
+        if reconnect_account_id:
+            params["reconnectAccountId"] = reconnect_account_id
     body = _call("GET", f"/connect/{platform}", params=params)
     url = body.get("authUrl") or body.get("url")
     if not url:
@@ -134,7 +141,11 @@ def connect_url(platform: str, profile_id: str, redirect_url: str, *,
 def discover_mailbox(email: str) -> dict[str, Any]:
     """Which sign-in an address needs: route = google_oauth | microsoft_oauth |
     imap | unsupported, with the provider and its app-password steps."""
-    return _call("POST", "/email/imap/discover", json={"email": email}, timeout=25)
+    body = _call("POST", "/email/imap/discover", json={"email": email}, timeout=25)
+    for key in ("discovery", "result", "data"):          # in case it comes wrapped
+        if isinstance(body.get(key), dict) and "route" in body[key]:
+            return body[key]
+    return body
 
 
 def connect_mailbox_url(provider: str, profile_id: str, redirect_url: str, email: str, *,

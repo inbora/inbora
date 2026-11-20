@@ -173,10 +173,13 @@ def connect(platform: Platform, body: ConnectRequest, tenant_id: str = Depends(c
                 "google" if body.route == "google_oauth" else "microsoft", profile_id,
                 f"{get_settings().app_url.rstrip('/')}/channels?connect=email", _email(body.email),
                 reconnect_account_id=(mine or {}).get("external_account_id"), language=_language(tenant_id))}
+        tenant = db.select_one("tenants", {"select": "name", "id": f"eq.{tenant_id}"}) or {}
         url = zernio.connect_url(
             platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
             whatsapp_app=body.whatsapp_app,
-            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None)
+            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None,
+            email=_email(body.email) if platform == "email" and body.email else None,
+            name=tenant.get("name") if platform == "email" else None)
     except zernio.ZernioError as e:
         print(f"[channels] connect {platform} failed: {e.status} {e.message}")
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
@@ -229,10 +232,17 @@ def discover_email(body: DiscoverRequest, tenant_id: str = Depends(current_tenan
     except zernio.ZernioError as e:
         print(f"[channels] email discovery failed: {e.status} {e.message}")
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    route = d.get("route")
+    print(f"[channels] email discovery for {email.split('@')[1]}: route={route} "
+          f"provider={(d.get('provider') or {}).get('name')} reason={d.get('unsupportedReason')} keys={sorted(d)[:12]}")
+    # Anything we can't read as Google / Microsoft / IMAP / a clear "not
+    # possible" goes to Zernio's own page, which knows more cases than we do.
+    if route not in ("google_oauth", "microsoft_oauth", "imap") and not (route == "unsupported" and d.get("unsupportedReason")):
+        route = "hosted"
     auth = d.get("auth") or {}
     return {
         "email": email,
-        "route": d.get("route") or "unsupported",
+        "route": route,
         "provider": (d.get("provider") or {}).get("name"),
         "password_kind": auth.get("kind"),                 # app_password | password
         "help_url": auth.get("helpUrl"),
