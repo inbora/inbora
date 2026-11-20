@@ -75,7 +75,7 @@ def handle_reply(payload: dict) -> str:
     if not result.text:
         return "empty"
     if channel["type"] == "email":
-        result.text = guards.greeting_on_own_line(result.text)     # "Hello Dana!" on its own line
+        result.text = guards.tidy_layout(result.text, [ctx.business_name])     # greeting and signature on their own lines
 
     row = db.insert("messages", {"tenant_id": thread["tenant_id"], "thread_id": thread_id,
                                  "role": "assistant", "content": result.text})[0]

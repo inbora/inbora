@@ -259,7 +259,7 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
     usage.record_tokens(tenant_id, result.tokens)
     if result.fallback:
         raise HTTPException(503, "The assistant couldn't write a draft. Try again in a moment.")
-    return {"text": guards.greeting_on_own_line(result.text)}
+    return {"text": guards.tidy_layout(result.text, [ctx.business_name, (me.get("full_name") or "").split(" ")[0]])}
 
 
 # ── Archive and delete

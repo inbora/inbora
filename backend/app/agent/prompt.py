@@ -40,13 +40,14 @@ Your order ships tomorrow and arrives within 3 business days.
 _EMAIL_LAYOUT = """
 ## How your email replies look (these rules take priority over the style rules above)
 - Always open with a short greeting, using the customer's first name if you know it (in every reply, not only the first).
-- End with a short friendly closing signed by the team, on one short line (for example: "Have a great day! {sign}"), translated to the customer's language. Nothing after that line.
+- End with a short friendly closing line, then the signature alone on the next line (for example: "Have a great day!" and below it "{sign}"), translated to the customer's language. Nothing after the signature.
 - Layout: the greeting alone on the first line, then an empty line, then the message, then an empty line, then the closing. For example:
 Hello Dana!
 
 Your order ships tomorrow and arrives within 3 business days.
 
-Have a great day! {sign}
+Have a great day!
+{sign}
 """
 
 _REP_TYPED = """
@@ -62,8 +63,9 @@ When they asked for this draft, the reply box already contained:
 """
 
 # The same for every channel (website chat, WhatsApp, Instagram and email).
-_REP_CLOSING = ("End with a short friendly closing and sign off with the name, on one short line "
-                "(for example: \"Have a great day! {sign}\"). Nothing after that line. Keep the whole message short.")
+_REP_CLOSING = ("End with a short friendly closing line, then the signature alone on the next line "
+                "(for example: \"Have a great day!\" and below it \"{sign}\"). Nothing after the signature. "
+                "Keep the whole message short.")
 
 _STYLE = """
 ## How you write
@@ -167,7 +169,7 @@ def build_system_prompt(
                    "(translated to the customer's language).")
             sign = f"The {ctx.business_name} team"
         out.append(_REP_STYLE.format(who=who, closing=_REP_CLOSING.format(sign=sign),
-                                     example_closing=f"Have a great day! {sign}"))
+                                     example_closing=f"Have a great day!\n{sign}"))
 
     if ctx.instructions:
         out.append(

@@ -80,3 +80,36 @@ def greeting_on_own_line(text: str) -> str:
     if rest[:1].isalpha() and rest[:1].islower():       # "Hi Dana, it ships..." reads as one sentence
         return text
     return f"{greeting}\n\n{rest}"
+
+
+_SIGNATURE = re.compile(r"^(.*?)([^.!?\n]*!)[ \t]+([^.!?\n]{2,60})$")
+
+
+def signature_on_own_line(text: str, names: list[str] | None = None) -> str:
+    """"Have a great day! The Grinta team" → the closing, then the signature
+    on a line of its own. Also when the closing runs on after the message
+    ("…today. Have a great day! The Grinta team"): the closing then gets its
+    own paragraph. Only when the end names the business or the person."""
+    text = (text or "").rstrip()
+    head, nl, last = text.rpartition("\n")
+    m = _SIGNATURE.match(last.strip())
+    if not m:
+        return text
+    before, closing, sig = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+    if len(sig.split()) > 6 or len(closing.split()) > 8 or not closing[:1].isalpha():
+        return text
+    if not any(n and n.strip().lower() in sig.lower() for n in (names or [])):
+        return text                   # a signature names the business or the person
+    if before and not re.search(r"[.!?]$", before):
+        return text                   # the closing starts a new sentence
+    end = f"{closing}\n{sig}"
+    if before:
+        end = f"{before}\n\n{end}"
+    return f"{head}\n{end}" if nl else end
+
+
+def tidy_layout(text: str, names: list[str] | None = None) -> str:
+    """Greeting and signature each on their own line (team drafts and the
+    agent's email replies). `names`: the business name and the team member's
+    first name, which a signature contains."""
+    return signature_on_own_line(greeting_on_own_line(text), names)
