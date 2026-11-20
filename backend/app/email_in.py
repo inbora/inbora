@@ -337,13 +337,17 @@ def poll(channel: dict) -> str:
 def poll_all() -> None:
     if not zernio.configured():
         return
-    for ch in db.select("channels", {"select": "*", "type": "eq.email", "status": "eq.connected"}):
+    for ch in db.select("channels", {"select": "*,tenants(status)", "type": "eq.email", "status": "eq.connected"}):
+        if (ch.pop("tenants", None) or {}).get("status") == "suspended":
+            continue
         try:
             outcome = poll(ch)
             if outcome not in ("0 new", "started"):
                 print(f"[email] poll {ch['id']}: {outcome}")
         except Exception as e:  # noqa: BLE001 — one mailbox failing never stops the others
             print(f"[email] poll {ch['id']} failed: {e}")
+            from . import errors
+            errors.report("email", "mailbox check", e, tenant_id=ch.get("tenant_id"))
 
 
 # ── Moving a deleted conversation's emails to the mailbox's Trash

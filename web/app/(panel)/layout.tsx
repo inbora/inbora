@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ErrorReporter from "@/components/ErrorReporter";
 import Sidebar from "@/components/Sidebar";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
@@ -29,7 +30,13 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           </div>
         </header>
         <main className="content">
+          <ErrorReporter />
           {!me && <div className="alert alert-warn">{t.panel.apiDown}</div>}
+          {me?.tenant.status === "suspended" && (
+            <div className="alert alert-error suspended-alert">
+              {t.panel.suspended} <a href="mailto:contact@inbora.ai">contact@inbora.ai</a>
+            </div>
+          )}
           {!!me?.channel_alerts?.length && (
             <div className="alert alert-error channel-alert">
               {t.panel.channelAlert.replace("{channels}", me.channel_alerts

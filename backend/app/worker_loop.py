@@ -8,7 +8,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import alerts, channels, db, email_in, jobs, media, usage, zernio
+from . import alerts, channels, db, email_in, errors, jobs, media, usage, zernio
 from .agent import context, guards, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
@@ -34,6 +34,9 @@ def handle_reply(payload: dict) -> str:
     channel = db.select_one("channels", {"select": "*", "id": f"eq.{thread['channel_id']}"})
     if channel is None or channel.get("mode") != "auto":
         return "channel-manual"
+    tenant = db.select_one("tenants", {"select": "status", "id": f"eq.{thread['tenant_id']}"}) or {}
+    if tenant.get("status") == "suspended":
+        return "suspended"        # a suspended business's agent doesn't answer
 
     rows = db.select("messages", {
         "select": "role,content,subject,attachment_url,attachment_mime",
@@ -146,6 +149,7 @@ def process(job: dict) -> None:
             traceback.print_exc()
         if not jobs.fail(job, error):
             print(f"[worker] job {job['id']} failed for good: {error}")
+            errors.report("job", job["kind"], e, tenant_id=job.get("tenant_id"))
             _on_final_failure(job, error)
         else:
             print(f"[worker] job {job['id']} will retry: {error}")
@@ -177,6 +181,10 @@ def run_forever(stop: threading.Event | None = None) -> None:
                 last_purge = time.time()
                 try:
                     jobs.purge_finished()
+                    # Errors not seen for 90 days (the Privacy Policy says logs are kept up to 90 days).
+                    from datetime import timedelta
+                    old = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+                    db.delete("error_events", {"last_at": f"lt.{old}"})
                 except Exception as e:  # noqa: BLE001
                     print(f"[worker] purge failed: {e}")
             stop.wait(1.0)

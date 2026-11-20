@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from fastapi import HTTPException
 
-from . import db
+from . import db, errors
 from .config import get_settings
 
 
@@ -35,11 +35,6 @@ def subscribe(tenant_id: str, plan_id: str, provider: str = "manual", ref: str |
 
 def signup_plan() -> dict | None:
     return db.select_one("plans", {"select": "*", "is_signup_default": "eq.true", "active": "eq.true"})
-
-
-def _admin_emails() -> list[str]:
-    rows = db.select("platform_admins", {"select": "email"})
-    return [r["email"] for r in rows if r.get("email")]
 
 
 class ManualProvider:
@@ -78,7 +73,7 @@ class ManualProvider:
 <p style="margin:0 0 6px"><b>From:</b> {e(who.get('full_name') or '')} {e(who.get('email') or '')}</p>
 <p style="margin:0 0 14px"><b>{e(current)}</b> → <b>{e(plan['name'])}</b> (${e(str(plan.get('price_usd', '')))})</p>
 <p><a href="{e(url)}" style="display:inline-block;background:#0e9f6e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Open Super-admin</a></p></div>"""
-            _send_email(_admin_emails(), f"Plan request: {tenant.get('name', '')} → {plan['name']}", body)
+            _send_email(errors.admin_emails(), f"Plan request: {tenant.get('name', '')} → {plan['name']}", body)
         except Exception as e:  # noqa: BLE001 — the request is saved either way
             print(f"[billing] could not email the request: {e}")
 

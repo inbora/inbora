@@ -9,6 +9,17 @@ def deliver(channel: dict, thread: dict, contact: dict, text: str,
             image_url: str | None = None, key: str | None = None) -> str | None:
     """Send the message. Returns None when it went out, or a reason when it
     didn't (stored on the message so the inbox can show it)."""
+    err = _deliver(channel, thread, contact, text, image_url, key)
+    if err and err.startswith("error:"):
+        # Unexpected failures go to error monitoring; a closed 24-hour window
+        # or a disconnected account is shown to the team instead.
+        from .. import errors
+        errors.report("delivery", channel.get("type") or "?", message=err[6:].strip(), tenant_id=channel.get("tenant_id"))
+    return err
+
+
+def _deliver(channel: dict, thread: dict, contact: dict, text: str,
+             image_url: str | None, key: str | None) -> str | None:
     kind = channel.get("type")
     if kind == "widget":
         return None

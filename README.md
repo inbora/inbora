@@ -285,6 +285,44 @@ Nothing else (`BILLING_PROVIDER` defaults to `manual`).
 - **AI cost tracking:** input, cached and output tokens per business per
   period are stored in `usage_counters` (`ai_*_tokens`).
 
+## Step 8 — Super-admin, error monitoring, legal pages
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0010_admin.sql`.
+Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
+
+- **Super-admin page (tabs):**
+  - *Businesses:* plan (change it), conversations used / limit, **+ Bonus**
+    (extra conversations this period; negative takes back), connected and
+    broken channels, team size, **Suspend / Activate**. Suspended = the panel
+    is locked (a banner explains), the website chat is off, the agent doesn't
+    answer; incoming messages are still kept. Plan requests are listed on top.
+  - *Plans:* create, edit, hide from the Plan page (you can still give it),
+    retire (can't be given), reorder, choose the signup plan. Edits apply to
+    new subscribers only; current businesses keep their snapshot.
+  - *Errors:* every error, grouped with a count — unexpected API errors, jobs
+    that failed for good, failed deliveries (not a closed 24-hour window or a
+    disconnected account), mailbox checks, and crashes in the panel in the
+    browser. You get an email the first time and at most once an hour per
+    error; "Mark fixed" clears it (a new email if it comes back). Errors not
+    seen for 90 days are deleted. Render logs keep everything too.
+  - *Data deletion:* requests from the public page, with the matching
+    customers in every business (by email, phone or Instagram username).
+    "Delete data" removes the customers, their conversations, messages and
+    photos; or Dismiss. The person can check the status with their code.
+- **Public pages** (no login): `/terms`, `/privacy`, `/data-deletion`. Linked
+  from signup and the login pages. English only. They name "Inbora, Israel" —
+  add the legal entity when it exists, and have a lawyer review them.
+
+### Closed beta checklist
+1. Run migrations 0004–0010 in Supabase (in order) if not done yet.
+2. Gemini: make sure billing is on for the API key — the Privacy Policy says
+   messages are not used to train AI models, which holds on the paid tier.
+3. In Zernio: webhook set, payment method added (needed for email).
+4. Sign up Grinta and Fanila with their real accounts; connect their channels;
+   write their knowledge; give them a plan from the Super-admin page.
+5. Watch the Super-admin *Errors* tab and your inbox for a week; then add the
+   next 1–3 businesses. Done when they run two weeks without your help.
+
 ---
 
 ## Run locally

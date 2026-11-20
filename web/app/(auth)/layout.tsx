@@ -1,3 +1,4 @@
+import Link from "next/link";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import Logo from "@/components/Logo";
 import { getI18n } from "@/lib/i18n/server";
@@ -15,6 +16,10 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         </div>
         <div className="auth-tagline">{t.tagline}</div>
         {children}
+        <div className="auth-legal">
+          <Link href="/terms">{t.auth.terms}</Link>
+          <Link href="/privacy">{t.auth.privacy}</Link>
+        </div>
       </div>
     </div>
   );

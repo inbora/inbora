@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from . import db, worker_loop
+from . import db, errors, worker_loop
 from .config import get_settings
-from .routers import admin, agent, billing, channels, inbox, knowledge, me, push, widget, zernio_webhook
+from .routers import (admin, agent, billing, channels, inbox, knowledge, me, public, push, widget,
+                      zernio_webhook)
 
 settings = get_settings()
 
@@ -18,7 +20,7 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.7.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.8.0", lifespan=lifespan)
 
 
 class SplitCORS:
@@ -40,6 +42,18 @@ class SplitCORS:
 app.add_middleware(SplitCORS)
 
 
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception):
+    """Anything not handled: log it, record it for the Super-admin page, and
+    answer 500 (the traceback stays in the Render logs too)."""
+    import traceback
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+    route = request.scope.get("route")
+    where = f"{request.method} {getattr(route, 'path', request.url.path)}"
+    errors.report("api", where, exc)
+    return JSONResponse({"detail": "Something went wrong on our side."}, status_code=500)
+
+
 @app.get("/health")
 def health():
     """Render's health check. Also reports whether Supabase is reachable, and why not."""
@@ -59,6 +73,7 @@ def health():
 app.include_router(me.router)
 app.include_router(admin.router)
 app.include_router(billing.router)
+app.include_router(public.router)
 app.include_router(agent.router)
 app.include_router(knowledge.router)
 app.include_router(channels.router)

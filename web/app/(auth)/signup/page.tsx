@@ -76,6 +76,9 @@ export default function SignupPage() {
           value={password} onChange={(e) => setPassword(e.target.value)} />
         <span className="hint">{t.auth.passwordHint}</span>
       </div>
+      <p className="agree">
+        {t.auth.agree}<Link href="/terms">{t.auth.terms}</Link>{t.auth.and}<Link href="/privacy">{t.auth.privacy}</Link>.
+      </p>
       <button className="btn" disabled={busy}>{t.auth.signupButton}</button>
       <div className="auth-links">
         <span>

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { publicOrigin } from "@/lib/origin";
 
 // Pages anyone can open without logging in.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth", "/terms", "/privacy", "/data-deletion"];
 // Pages a logged-in user should be sent away from.
 const GUEST_ONLY = ["/login", "/signup", "/forgot-password"];
 

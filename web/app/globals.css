@@ -457,3 +457,60 @@ a.handle:hover { color: var(--accent); }
 .email-connect .ec-note { margin: 12px 0 0; }
 .email-connect .actions { margin-top: 18px; }
 .email-connect .error-text { margin: 10px 0 0; }
+
+/* ── Super-admin (Step 8) ─────────────────────────── */
+.admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 4px 0 16px; overflow-x: auto; }
+.admin-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 12px; font: inherit; font-size: 14px;
+  font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.admin-tab.on { color: var(--text, #14161a); border-bottom-color: var(--accent); }
+.tab-count { background: #eceef1; color: #3d4450; border-radius: 999px; font-size: 11px; padding: 1px 7px; }
+.tab-count-red { background: #fdecea; color: var(--danger); }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card-head h2 { margin: 0; }
+.nowrap { white-space: nowrap; }
+.row-suspended td { opacity: .6; }
+.ch-pill { margin-inline-end: 4px; }
+.order-btns .icon-btn { padding: 2px 5px; }
+.plan-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.plan-modal { width: 520px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.plan-modal .field input, .plan-modal .field select { width: 100%; }
+.plan-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.plan-checks { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.me-auto { margin-inline-end: auto; }
+.empty-ok { color: var(--muted); font-size: 14px; padding: 8px 0; }
+.err-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.err-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.err-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.err-count { margin-inline-start: auto; font-size: 13px; font-weight: 700; color: var(--muted); }
+.err-msg { margin: 6px 0; font-size: 13.5px; color: #3d4450; overflow-wrap: anywhere; }
+.err-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.err-item details { margin-top: 6px; font-size: 13px; }
+.err-item pre { background: #f6f7f9; border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+.err-kind { background: #eef0ff; color: #3730a3; text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; }
+.err-api, .err-job { background: #fdecea; color: var(--danger); }
+.err-delivery { background: var(--warn-bg); color: var(--warn-ink); }
+.del-matches { font-size: 13.5px; margin: 6px 0; }
+.del-matches ul { margin: 4px 0 0; padding-inline-start: 18px; }
+.del-closed { opacity: .65; }
+
+/* ── Public pages (Terms, Privacy, data deletion) ─── */
+.public-wrap { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.public-head { padding: 18px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.public-brand { text-decoration: none; color: inherit; margin: 0; display: inline-flex; }
+.public-main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
+.public-main h1 { font-size: 28px; margin: 0 0 6px; }
+.public-main h2 { font-size: 18px; margin: 28px 0 8px; }
+.public-main p, .public-main li { font-size: 15px; line-height: 1.65; color: #2a2f37; }
+.public-main ul { padding-inline-start: 22px; }
+.public-main .updated { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.public-main .card .field input, .public-main .card .field textarea { width: 100%; }
+.public-foot { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; padding: 18px; font-size: 13px; border-top: 1px solid var(--border); }
+.public-foot a, .auth-legal a { color: var(--muted); }
+.auth-legal { text-align: center; font-size: 12px; color: var(--muted); margin-top: 14px; display: flex; gap: 14px; justify-content: center; }
+.agree { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; line-height: 1.5; }
+.suspended-alert a { font-weight: 700; color: inherit; }
+.deletion-check label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.check-row { display: flex; gap: 8px; }
+.check-row input { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit; }
+.check-row .btn { width: auto; }
+.deletion-status { font-size: 16px; }
