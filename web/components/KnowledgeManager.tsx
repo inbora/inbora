@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/apiClient";
+import SiteImport from "@/components/SiteImport";
 import { useI18n } from "@/lib/i18n/client";
 
 export type Article = {
@@ -31,6 +32,8 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
   const [templates, setTemplates] = useState<Templates | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importVisible, setImportVisible] = useState(false);
 
   async function reload() {
     setData(await api<Listing>("/knowledge"));
@@ -120,6 +123,10 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
           </div>
           <div className="actions">
             <button className="btn btn-secondary" disabled={busy}
+              onClick={() => { setImportOpen(true); setShowTemplates(false); setDraft(null); }}>
+              {k.importButton}
+            </button>
+            <button className="btn btn-secondary" disabled={busy}
               onClick={() => { setShowTemplates((v) => !v); setPicked(null); setDraft(null); }}>
               {k.addTemplates}
             </button>
@@ -132,6 +139,9 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <SiteImport open={importOpen} onClose={() => setImportOpen(false)} onAdded={reload} onVisible={setImportVisible}
+        used={data.used} limit={data.limit} />
 
       {showTemplates && (
         <div className="card">
@@ -186,8 +196,13 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
         </div>
       )}
 
-      {data.articles.length === 0 && !draft && !showTemplates && (
-        <div className="card empty"><p>{k.empty}</p></div>
+      {data.articles.length === 0 && !draft && !showTemplates && !importVisible && (
+        <div className="card empty-cta">
+          <h3>{k.emptyTitle}</h3>
+          <p>{k.emptyText}</p>
+          <button className="btn" onClick={() => setImportOpen(true)}>{k.importButton}</button>
+          <p className="hint">{k.emptyOr}</p>
+        </div>
       )}
 
       <div className="article-list">

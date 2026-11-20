@@ -8,7 +8,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import alerts, channels, db, email_in, errors, jobs, media, usage, zernio
+from . import alerts, channels, db, email_in, errors, jobs, media, site_import, usage, zernio
 from .agent import context, guards, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
@@ -132,7 +132,7 @@ def _on_final_failure(job: dict, error: str) -> None:
 
 HANDLERS = {"reply": handle_reply, "alert": alerts.handle_alert, "media": handle_media,
             "channel_alert": alerts.handle_channel_alert, "email_trash": email_in.handle_trash,
-            "usage_alert": usage.handle_usage_alert}
+            "usage_alert": usage.handle_usage_alert, "site_import": site_import.handle}
 
 
 def process(job: dict) -> None:

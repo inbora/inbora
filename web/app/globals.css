@@ -514,3 +514,32 @@ a.handle:hover { color: var(--accent); }
 .check-row input { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit; }
 .check-row .btn { width: auto; }
 .deletion-status { font-size: 16px; }
+
+/* Knowledge: import from website */
+.imp-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+.imp-row input { flex: 1; min-width: 200px; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; font: inherit; }
+.imp-row input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.imp-row .inline-field { margin-inline-end: 0; }
+.imp-meter { margin: 14px 0 8px; }
+.imp-status { font-size: 14px; margin-bottom: 4px; }
+.sug { display: flex; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.sug:first-of-type { border-top: none; }
+.sug > input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+.sug-main { flex: 1; min-width: 0; }
+.sug-title { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sug-snip { color: var(--muted); font-size: 14px; margin-top: 4px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-line; }
+.sug-meta { font-size: 12.5px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.sug-meta a { color: var(--muted); overflow-wrap: anywhere; }
+.sug-meta .link-btn { font-size: 12.5px; }
+.tag-info { font-size: 12px; font-weight: 500; color: #475569; background: #eef2f7; border-radius: 999px; padding: 2px 9px; }
+.sug-edit input, .sug-edit textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; }
+.sug-edit input { font-weight: 600; margin-bottom: 6px; }
+.sug-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
+.sug-foot .grow { color: var(--muted); font-size: 13.5px; min-width: 180px; }
+.sug-foot .btn { width: auto; }
+.empty-cta { text-align: center; padding: 28px 20px; }
+.empty-cta h3 { margin: 0 0 6px; }
+.empty-cta p { color: var(--muted); margin: 0 0 14px; }
+.empty-cta .btn { width: auto; }
+.empty-cta .hint { margin: 14px 0 0; }
+.spacer { flex: 1; }

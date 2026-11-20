@@ -313,8 +313,27 @@ Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
   from signup and the login pages. English only. They name "Inbora, Israel" —
   add the legal entity when it exists, and have a lawyer review them.
 
+## Knowledge from the website
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0011_site_import.sql`.
+
+- **Knowledge → Import from website** (also the main action on an empty
+  Knowledge page): the business enters its address and language. The worker
+  reads up to 30 useful pages (shipping, returns, FAQ, contact, about…; from
+  the sitemap, Shopify's fixed policy pages and links), skipping products,
+  carts and blogs, and respecting robots.txt. Gemini then writes articles
+  from that text only — anything unclear is left out, never [bracketed].
+- **Review:** the suggestions are listed, all ticked; untick or edit, then
+  "Add". Added articles are switched on. A suggestion whose title matches an
+  existing article is marked "You already have…" and is added next to it.
+- Leaving the page is fine: the import keeps going and comes back.
+- Limits: 5 imports per business per day; only public web addresses are
+  fetched (never the server's own network). Sites built entirely in
+  JavaScript may show too little text — the panel suggests templates then.
+- The AI tokens count toward the business's usage like answers do.
+
 ### Closed beta checklist
-1. Run migrations 0004–0010 in Supabase (in order) if not done yet.
+1. Run migrations 0004–0011 in Supabase (in order) if not done yet.
 2. Gemini: make sure billing is on for the API key — the Privacy Policy says
    messages are not used to train AI models, which holds on the paid tier.
 3. In Zernio: webhook set, payment method added (needed for email).

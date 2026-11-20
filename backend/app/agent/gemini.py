@@ -39,8 +39,10 @@ def models() -> list[str]:
 
 def generate(history: list[types.Content], system_instruction: str,
              tools: list[types.Tool] | None,
-             deadline: float | None = None) -> types.GenerateContentResponse:
-    """deadline: a time.monotonic() value; no new model is tried after it."""
+             deadline: float | None = None, json_reply: bool = False,
+             timeout_seconds: float | None = None) -> types.GenerateContentResponse:
+    """deadline: a time.monotonic() value; no new model is tried after it.
+    json_reply: ask for a JSON answer. timeout_seconds: for long jobs (website import)."""
     last_error: Exception | None = None
     for name in models():
         if deadline is not None and time.monotonic() > deadline:
@@ -54,6 +56,8 @@ def generate(history: list[types.Content], system_instruction: str,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     tools=tools or None,
+                    response_mime_type="application/json" if json_reply else None,
+                    http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000)) if timeout_seconds else None,
                 ),
             )
             # A "successful" response can be empty (safety block, max tokens…):
