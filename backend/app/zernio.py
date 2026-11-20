@@ -149,15 +149,13 @@ def discover_mailbox(email: str) -> dict[str, Any]:
 
 
 def connect_mailbox_url(provider: str, profile_id: str, redirect_url: str, email: str, *,
-                        reconnect_account_id: str | None = None, language: str | None = None) -> str:
+                        reconnect_account_id: str | None = None) -> str:
     """Straight to Google's / Microsoft's own sign-in for this address (no
     Zernio page to pick the provider)."""
     params: dict[str, str] = {"profileId": profile_id, "redirect_url": redirect_url,
                               "scopes": "email", "loginHint": email}
     if reconnect_account_id:
         params["reconnectAccountId"] = reconnect_account_id
-    if language:
-        params["language"] = language
     body = _call("GET", f"/connect/{provider}", params=params)
     url = body.get("authUrl") or body.get("url")
     if not url:

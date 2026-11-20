@@ -169,19 +169,27 @@ def connect(platform: Platform, body: ConnectRequest, tenant_id: str = Depends(c
         profile_id = zernio.ensure_profile(tenant_id)
         if platform == "email" and body.email and body.route:
             # Straight to Google's / Microsoft's sign-in, address filled in.
-            return {"url": zernio.connect_mailbox_url(
-                "google" if body.route == "google_oauth" else "microsoft", profile_id,
-                f"{get_settings().app_url.rstrip('/')}/channels?connect=email", _email(body.email),
-                reconnect_account_id=(mine or {}).get("external_account_id"), language=_language(tenant_id))}
+            # If Zernio refuses that link, fall back to its own page below.
+            try:
+                return {"url": zernio.connect_mailbox_url(
+                    "google" if body.route == "google_oauth" else "microsoft", profile_id,
+                    f"{get_settings().app_url.rstrip('/')}/channels?connect=email", _email(body.email),
+                    reconnect_account_id=(mine or {}).get("external_account_id"))}
+            except zernio.ZernioError as e:
+                print(f"[channels] direct {body.route} link failed ({e.status} {e.message}); using Zernio's page")
         tenant = db.select_one("tenants", {"select": "name", "id": f"eq.{tenant_id}"}) or {}
-        url = zernio.connect_url(
-            platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
-            whatsapp_app=body.whatsapp_app,
-            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None,
-            email=_email(body.email) if platform == "email" and body.email else None,
-            name=tenant.get("name") if platform == "email" else None)
+        redirect = f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}"
+        reconnect = (mine or {}).get("external_account_id") if platform != "whatsapp" else None
+        if platform == "email" and body.email:
+            try:     # Zernio's page with the address and sender name filled in
+                return {"url": zernio.connect_url(platform, profile_id, redirect, reconnect_account_id=reconnect,
+                                                  email=_email(body.email), name=tenant.get("name"))}
+            except zernio.ZernioError as e:
+                print(f"[channels] email connect with address failed, trying plain: {e.status} {e.code} {e.message}")
+        url = zernio.connect_url(platform, profile_id, redirect, whatsapp_app=body.whatsapp_app,
+                                 reconnect_account_id=reconnect)
     except zernio.ZernioError as e:
-        print(f"[channels] connect {platform} failed: {e.status} {e.message}")
+        print(f"[channels] connect {platform} failed: {e.status} {e.code} {e.message}")
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
     return {"url": url}
 
@@ -212,11 +220,6 @@ def _email(value: str) -> str:
     return value
 
 
-def _language(tenant_id: str) -> str:
-    t = db.select_one("tenants", {"select": "default_language", "id": f"eq.{tenant_id}"}) or {}
-    return t.get("default_language") or "en"
-
-
 class DiscoverRequest(BaseModel):
     email: str = Field(max_length=254)
 
@@ -230,8 +233,9 @@ def discover_email(body: DiscoverRequest, tenant_id: str = Depends(current_tenan
     try:
         d = zernio.discover_mailbox(email)
     except zernio.ZernioError as e:
-        print(f"[channels] email discovery failed: {e.status} {e.message}")
-        raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+        # Can't check the address: go to Zernio's own page instead of failing.
+        print(f"[channels] email discovery failed: {e.status} {e.code} {e.message}")
+        d = {"route": None}
     route = d.get("route")
     print(f"[channels] email discovery for {email.split('@')[1]}: route={route} "
           f"provider={(d.get('provider') or {}).get('name')} reason={d.get('unsupportedReason')} keys={sorted(d)[:12]}")
