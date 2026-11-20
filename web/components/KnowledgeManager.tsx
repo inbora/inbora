@@ -25,7 +25,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
   const [data, setData] = useState<Listing>(initial);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [picked, setPicked] = useState<string[]>([...TEMPLATE_KEYS]);
+  const [picked, setPicked] = useState<string | null>(null);
   const [tplLang, setTplLang] = useState<string>(lang);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -83,7 +83,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
 
   const addTemplates = () =>
     run(async () => {
-      await api("/knowledge/templates", { method: "POST", body: JSON.stringify({ keys: picked, language: tplLang }) });
+      await api("/knowledge/templates", { method: "POST", body: JSON.stringify({ keys: [picked], language: tplLang }) });
       setShowTemplates(false);
       await reload();
     });
@@ -112,7 +112,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
           </div>
           <div className="actions">
             <button className="btn btn-secondary" disabled={busy}
-              onClick={() => { setShowTemplates((v) => !v); setDraft(null); }}>
+              onClick={() => { setShowTemplates((v) => !v); setPicked(null); setDraft(null); }}>
               {k.addTemplates}
             </button>
             <button className="btn" disabled={busy}
@@ -132,8 +132,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
           <div className="checks">
             {TEMPLATE_KEYS.map((key) => (
               <label key={key} className="check">
-                <input type="checkbox" checked={picked.includes(key)}
-                  onChange={(e) => setPicked(e.target.checked ? [...picked, key] : picked.filter((x) => x !== key))} />
+                <input type="radio" name="kb-template" checked={picked === key} onChange={() => setPicked(key)} />
                 {k.templateNames[key]}
               </label>
             ))}
@@ -148,7 +147,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
               </select>
             </label>
             <button className="btn btn-secondary" onClick={() => setShowTemplates(false)}>{k.cancel}</button>
-            <button className="btn" disabled={busy || picked.length === 0} onClick={addTemplates}>{k.add}</button>
+            <button className="btn" disabled={busy || !picked} onClick={addTemplates}>{k.add}</button>
           </div>
         </div>
       )}
