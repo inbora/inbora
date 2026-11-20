@@ -1,3 +1,4 @@
+import BusinessFieldForm from "@/components/BusinessFieldForm";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationSettings from "@/components/NotificationSettings";
 import ProfileNameForm from "@/components/ProfileNameForm";
@@ -7,6 +8,7 @@ import { getMe } from "@/lib/me";
 export default async function SettingsPage() {
   const { t } = await getI18n();
   const me = await getMe();
+  const canEdit = me?.tenant.role === "owner" || me?.tenant.role === "admin";
 
   return (
     <>
@@ -22,9 +24,19 @@ export default async function SettingsPage() {
             <span className="hint">{t.settings.yourNameHint}</span>
           </dd>
           <dt>{t.settings.business}</dt>
-          <dd>{me?.tenant.name ?? "—"}</dd>
+          {canEdit && me ? (
+            <dd>
+              <BusinessFieldForm field="name" initial={me.tenant.name} />
+              <span className="hint">{t.settings.businessHint}</span>
+            </dd>
+          ) : <dd>{me?.tenant.name ?? "—"}</dd>}
           <dt>{t.settings.businessId}</dt>
-          <dd dir="ltr">{me?.tenant.slug ?? "—"}</dd>
+          {canEdit && me ? (
+            <dd>
+              <BusinessFieldForm field="slug" initial={me.tenant.slug} />
+              <span className="hint">{t.settings.businessIdHint}</span>
+            </dd>
+          ) : <dd dir="ltr">{me?.tenant.slug ?? "—"}</dd>}
           <dt>{t.settings.language}</dt>
           <dd>
             <LanguageSwitcher />

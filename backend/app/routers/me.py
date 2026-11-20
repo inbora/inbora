@@ -1,4 +1,6 @@
 """The logged-in user, their business (tenant) and its plan."""
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -72,3 +74,36 @@ def update_profile(body: ProfileIn, user: CurrentUser = Depends(current_user)):
     name = " ".join(body.full_name.split())
     db.update("profiles", {"id": f"eq.{user.id}"}, {"full_name": name or None})
     return {"full_name": name}
+
+
+class BusinessIn(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    slug: str | None = Field(default=None, max_length=40)
+
+
+_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
+
+
+@router.put("/me/business")
+def update_business(body: BusinessIn, user: CurrentUser = Depends(current_user)):
+    """The business name and ID. Owners and admins only."""
+    m = db.select_one("tenant_members", {"select": "tenant_id,role", "user_id": f"eq.{user.id}",
+                                         "order": "created_at.asc"})
+    if m is None:
+        raise HTTPException(404, "No business found for this user")
+    if m["role"] not in ("owner", "admin"):
+        raise HTTPException(403, "Only the owner or an admin can change this")
+    tid, values = m["tenant_id"], {}
+    if body.name is not None:
+        values["name"] = " ".join(body.name.split())
+        if not values["name"]:
+            raise HTTPException(422, {"code": "name_empty"})
+    if body.slug is not None:
+        values["slug"] = body.slug.strip().lower()
+        if not _SLUG.match(values["slug"]) or "--" in values["slug"]:
+            raise HTTPException(422, {"code": "slug_invalid"})
+        if db.select_one("tenants", {"select": "id", "slug": f"eq.{values['slug']}", "id": f"neq.{tid}"}):
+            raise HTTPException(409, {"code": "slug_taken"})
+    if values:
+        db.update("tenants", {"id": f"eq.{tid}"}, values)
+    return db.select_one("tenants", {"select": "name,slug", "id": f"eq.{tid}"})
