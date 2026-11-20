@@ -41,14 +41,24 @@ TEXTS = {
 
 
 def current(tenant_id: str) -> dict:
-    """{status, used, quota, period_start, period_end} for the current period."""
-    return db.rpc("current_usage", {"p_tenant": tenant_id}) or {"status": "no_plan"}
+    """{status, used, quota, period_start, period_end} for the current period.
+    status "unavailable" when counting isn't set up (migration 0009 not run)."""
+    try:
+        return db.rpc("current_usage", {"p_tenant": tenant_id}) or {"status": "no_plan"}
+    except Exception as e:  # noqa: BLE001 — the panel keeps working without the count
+        print(f"[usage] current_usage failed (is migration 0009 run?): {e}")
+        return {"status": "unavailable"}
 
 
 def consume(tenant_id: str, thread_id: str) -> dict:
     """Count this thread's conversation if it isn't counted yet. status:
-    existing | new | over | no_plan. Over = don't use the AI."""
-    res = db.rpc("consume_conversation", {"p_tenant": tenant_id, "p_thread": thread_id}) or {"status": "no_plan"}
+    existing | new | over | no_plan | unavailable. Over = don't use the AI.
+    If counting fails, customers are still answered (never blocked by a bug)."""
+    try:
+        res = db.rpc("consume_conversation", {"p_tenant": tenant_id, "p_thread": thread_id}) or {"status": "no_plan"}
+    except Exception as e:  # noqa: BLE001
+        print(f"[usage] consume_conversation failed (is migration 0009 run?): {e}")
+        return {"status": "unavailable"}
     if res.get("alert"):
         try:
             jobs.enqueue("usage_alert", tenant_id, {"tenant_id": tenant_id, "level": int(res["alert"])})

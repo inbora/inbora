@@ -26,6 +26,14 @@ def me(user: CurrentUser = Depends(current_user)):
         "status": "eq.active",
     })
 
+    if cur.get("status") != "ok":
+        # Counting not available: show the last stored count.
+        u = db.select_one("usage_counters", {
+            "select": "conversations_used,bonus_conversations", "tenant_id": f"eq.{tenant['id']}",
+            "order": "period_start.desc"}) or {}
+        quota = int(((sub or {}).get("limits") or {}).get("conversation_quota") or 0)
+        cur = {"used": u.get("conversations_used", 0), "quota": quota + int(u.get("bonus_conversations") or 0)}
+
     plan = None
     if sub:
         limits = sub["limits"]
