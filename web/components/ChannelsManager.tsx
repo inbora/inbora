@@ -202,6 +202,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
           return (
             <MessagingChannelCard key={`${p}-${ch?.id ?? "none"}-${ch?.status ?? ""}`} platform={p} channel={ch}
               ready={data.messaging_ready !== false} roomLeft={roomLeft} maxChannels={data.max_channels} onChanged={reload}
+              onConnected={() => setNotice({ ok: true, text: fill(c.connectedOk, { channel: t.inbox.channelNames[p] }) })}
               open={openRow === p} onToggle={(force) => toggle(p, force)} />
           );
         })}

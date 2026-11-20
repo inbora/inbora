@@ -131,6 +131,41 @@ def connect_url(platform: str, profile_id: str, redirect_url: str, *,
     return url
 
 
+def discover_mailbox(email: str) -> dict[str, Any]:
+    """Which sign-in an address needs: route = google_oauth | microsoft_oauth |
+    imap | unsupported, with the provider and its app-password steps."""
+    return _call("POST", "/email/imap/discover", json={"email": email}, timeout=25)
+
+
+def connect_mailbox_url(provider: str, profile_id: str, redirect_url: str, email: str, *,
+                        reconnect_account_id: str | None = None, language: str | None = None) -> str:
+    """Straight to Google's / Microsoft's own sign-in for this address (no
+    Zernio page to pick the provider)."""
+    params: dict[str, str] = {"profileId": profile_id, "redirect_url": redirect_url,
+                              "scopes": "email", "loginHint": email}
+    if reconnect_account_id:
+        params["reconnectAccountId"] = reconnect_account_id
+    if language:
+        params["language"] = language
+    body = _call("GET", f"/connect/{provider}", params=params)
+    url = body.get("authUrl") or body.get("url")
+    if not url:
+        raise ZernioError(502, "Zernio did not return a connect link")
+    return url
+
+
+def connect_imap(profile_id: str, email: str, password: str, *, name: str | None = None,
+                 reconnect_account_id: str | None = None) -> dict[str, Any]:
+    """Connect any other mailbox with its (app) password. Zernio checks the
+    servers and the password before storing anything (422 when a check fails)."""
+    payload: dict[str, Any] = {"profileId": profile_id, "email": email, "password": password}
+    if name:
+        payload["name"] = name
+    if reconnect_account_id:
+        payload["reconnectAccountId"] = reconnect_account_id
+    return _call("POST", "/email/imap/accounts", json=payload, timeout=60, retries=0)
+
+
 def find_account(profile_id: str, account_id: str) -> dict[str, Any] | None:
     """The account, if it really belongs to this profile (never trust the
     browser's redirect parameters on their own)."""

@@ -4,19 +4,21 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 import ChannelRow from "./ChannelRow";
+import EmailConnectDialog from "./EmailConnectDialog";
 import type { Channel } from "./ChannelsManager";
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
 /** WhatsApp, Instagram or email: one-click connect (through Zernio), status,
     who answers, reconnect and disconnect — as a row that opens. */
-export default function MessagingChannelCard({ platform, channel, ready, roomLeft, maxChannels, onChanged, open, onToggle }: {
+export default function MessagingChannelCard({ platform, channel, ready, roomLeft, maxChannels, onChanged, onConnected, open, onToggle }: {
   platform: "whatsapp" | "instagram" | "email";
   channel: Channel | null;
   ready: boolean;
   roomLeft: boolean;
   maxChannels: number;
   onChanged: () => Promise<void>;
+  onConnected?: () => void;
   open: boolean;
   onToggle: (open?: boolean) => void;
 }) {
@@ -27,10 +29,15 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
   const [mode, setMode] = useState<"auto" | "human">(channel?.mode ?? (platform === "email" ? "human" : "auto"));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"" | "saved" | "error" | "limit">("");
+  const [emailDialog, setEmailDialog] = useState(false);
 
   const state = !channel ? "none" : channel.status === "error" ? "error" : "connected";
 
   async function connect() {
+    if (platform === "email") {          // our own Connect Email window
+      setEmailDialog(true);
+      return;
+    }
     setBusy(true);
     setStatus("");
     try {
@@ -95,6 +102,11 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
   }
 
   return (
+    <>
+    {emailDialog && (
+      <EmailConnectDialog initialEmail={channel?.display_name} onClose={() => setEmailDialog(false)}
+        onConnected={async () => { setEmailDialog(false); await onChanged(); onConnected?.(); }} />
+    )}
     <ChannelRow kind={platform} name={name} className={`channel-${platform}`} open={open} onToggle={() => onToggle()}
       settingsLabel={state === "connected"}
       account={channel?.display_name}
@@ -159,5 +171,6 @@ export default function MessagingChannelCard({ platform, channel, ready, roomLef
       {status === "limit" && <div className="alert alert-warn">{fill(c.limitReached, { n: maxChannels })}</div>}
       {status === "error" && <p className="error-text">{c.error}</p>}
     </ChannelRow>
+    </>
   );
 }

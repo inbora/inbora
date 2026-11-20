@@ -448,3 +448,12 @@ a.handle:hover { color: var(--accent); }
 .quota-alert a { font-weight: 700; color: inherit; text-decoration: underline; }
 .req-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .plan-select { height: 30px; border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; font: inherit; font-size: 13px; background: #fff; }
+
+/* ── Connect Email window ─────────────────────────── */
+.email-connect .ec-label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+.email-connect input { width: 100%; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; }
+.email-connect .ec-steps { margin: 6px 0 8px; padding-inline-start: 20px; font-size: 13.5px; color: #3d4450; line-height: 1.7; }
+.email-connect .ec-imap { font-size: 13.5px; color: var(--warn-ink); }
+.email-connect .ec-note { margin: 12px 0 0; }
+.email-connect .actions { margin-top: 18px; }
+.email-connect .error-text { margin: 10px 0 0; }

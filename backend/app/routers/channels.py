@@ -152,6 +152,9 @@ def upsert_messaging_channel(tenant_id: str, platform: str, account: dict) -> di
 class ConnectRequest(BaseModel):
     # WhatsApp only: keep using the number in the WhatsApp Business app.
     whatsapp_app: bool = True
+    # Email only: the address and the sign-in /channels/email/discover found.
+    email: str | None = Field(default=None, max_length=254)
+    route: Literal["google_oauth", "microsoft_oauth"] | None = None
 
 
 Platform = Literal["whatsapp", "instagram", "email"]
@@ -161,6 +164,28 @@ Platform = Literal["whatsapp", "instagram", "email"]
 def connect(platform: Platform, body: ConnectRequest, tenant_id: str = Depends(current_tenant_id)):
     """Start the one-click connect: returns the link to open (Meta's own
     WhatsApp signup, Instagram login, or the mailbox sign-in, run through Zernio)."""
+    mine = _slot(tenant_id, platform)
+    try:
+        profile_id = zernio.ensure_profile(tenant_id)
+        if platform == "email" and body.email and body.route:
+            # Straight to Google's / Microsoft's sign-in, address filled in.
+            return {"url": zernio.connect_mailbox_url(
+                "google" if body.route == "google_oauth" else "microsoft", profile_id,
+                f"{get_settings().app_url.rstrip('/')}/channels?connect=email", _email(body.email),
+                reconnect_account_id=(mine or {}).get("external_account_id"), language=_language(tenant_id))}
+        url = zernio.connect_url(
+            platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
+            whatsapp_app=body.whatsapp_app,
+            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None)
+    except zernio.ZernioError as e:
+        print(f"[channels] connect {platform} failed: {e.status} {e.message}")
+        raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    return {"url": url}
+
+
+def _slot(tenant_id: str, platform: str) -> dict | None:
+    """The business's existing (broken) channel of this type, after checking
+    it may connect one. Raises when it can't."""
     if not zernio.configured():
         raise HTTPException(503, detail={"code": "not_configured"})
     rows = db.select("channels", {"select": "*", "tenant_id": f"eq.{tenant_id}"})
@@ -171,16 +196,82 @@ def connect(platform: Platform, body: ConnectRequest, tenant_id: str = Depends(c
         max_channels = int(plans.limits(tenant_id).get("max_channels") or 1)
         if len(_active(rows)) >= max_channels:
             raise HTTPException(422, detail={"code": "channel_limit", "limit": max_channels})
+    return mine
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _email(value: str) -> str:
+    value = (value or "").strip().lower()
+    if not _EMAIL_RE.match(value):
+        raise HTTPException(422, detail={"code": "bad_email"})
+    return value
+
+
+def _language(tenant_id: str) -> str:
+    t = db.select_one("tenants", {"select": "default_language", "id": f"eq.{tenant_id}"}) or {}
+    return t.get("default_language") or "en"
+
+
+class DiscoverRequest(BaseModel):
+    email: str = Field(max_length=254)
+
+
+@router.post("/email/discover")
+def discover_email(body: DiscoverRequest, tenant_id: str = Depends(current_tenant_id)):
+    """Which sign-in this address needs: Google, Microsoft, a password (any
+    other mailbox), or not possible — for our own Connect Email window."""
+    email = _email(body.email)
+    _slot(tenant_id, "email")
+    try:
+        d = zernio.discover_mailbox(email)
+    except zernio.ZernioError as e:
+        print(f"[channels] email discovery failed: {e.status} {e.message}")
+        raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
+    auth = d.get("auth") or {}
+    return {
+        "email": email,
+        "route": d.get("route") or "unsupported",
+        "provider": (d.get("provider") or {}).get("name"),
+        "password_kind": auth.get("kind"),                 # app_password | password
+        "help_url": auth.get("helpUrl"),
+        "enable_imap_url": next((p.get("url") for p in d.get("preflight") or [] if p.get("id") == "enable_imap"), None),
+        "needs_imap_on": any(p.get("id") == "enable_imap" for p in d.get("preflight") or []),
+        "unsupported_reason": d.get("unsupportedReason"),
+        "suggested_email": d.get("suggestedEmail"),
+    }
+
+
+class ImapRequest(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(min_length=1, max_length=300)
+
+
+@router.post("/email/imap")
+def connect_imap(body: ImapRequest, tenant_id: str = Depends(current_tenant_id)):
+    """Connect any other mailbox (iCloud, Yahoo, a hosting company...) with its
+    app password, without leaving Inbora. The password goes to Zernio, which
+    checks it; Inbora never stores it."""
+    email = _email(body.email)
+    mine = _slot(tenant_id, "email")
+    tenant = db.select_one("tenants", {"select": "name", "id": f"eq.{tenant_id}"}) or {}
     try:
         profile_id = zernio.ensure_profile(tenant_id)
-        url = zernio.connect_url(
-            platform, profile_id, f"{get_settings().app_url.rstrip('/')}/channels?connect={platform}",
-            whatsapp_app=body.whatsapp_app,
-            reconnect_account_id=(mine or {}).get("external_account_id") if platform != "whatsapp" else None)
+        res = zernio.connect_imap(profile_id, email, body.password, name=tenant.get("name"),
+                                  reconnect_account_id=(mine or {}).get("external_account_id"))
     except zernio.ZernioError as e:
-        print(f"[channels] connect {platform} failed: {e.status} {e.message}")
+        print(f"[channels] IMAP connect failed: {e.status} {e.code} {e.message}")
+        if e.status in (400, 401, 422):
+            text = f"{e.code} {e.message}".lower()
+            code = "wrong_password" if ("auth" in text or "password" in text or "login" in text) else "connect_failed"
+            raise HTTPException(422, detail={"code": code})
         raise HTTPException(502, detail={"code": "zernio_error", "message": e.message})
-    return {"url": url}
+    account = dict(res.get("account") or {})
+    if not (account.get("_id") or account.get("id") or account.get("accountId")):
+        raise HTTPException(502, detail={"code": "zernio_error", "message": "No account returned"})
+    account.setdefault("email", email)
+    return upsert_messaging_channel(tenant_id, "email", account)
 
 
 class CompleteRequest(BaseModel):

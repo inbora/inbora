@@ -230,12 +230,16 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
    other IMAP mailboxes (Zernio answers `402 payment_required` without one).
    Nothing else: same API key, same webhook and events as Step 5.
 
-- **Connect (Channels page → Email):** one click opens Zernio's hosted page.
-  It asks for the address and sends Gmail / Google Workspace and Outlook /
-  Microsoft 365 to their own sign-in; any other mailbox connects by IMAP with
-  an app password. No Google approval of our own is needed. The browser comes
-  back to `/channels?connect=email`; the API checks the account belongs to the
-  business's Zernio profile. Email starts with **only the team answering**
+- **Connect (Channels page → Email):** our own window, no Zernio page. It
+  asks for the address; `POST /channels/email/discover` asks Zernio which
+  sign-in it needs. Gmail / Google Workspace and Outlook / Microsoft 365 go
+  straight to Google's / Microsoft's sign-in with the address filled in
+  (`GET /v1/connect/google|microsoft?scopes=email&loginHint=…`) and come back
+  to `/channels?connect=email`, where the API checks the account belongs to
+  the business's Zernio profile. Any other mailbox connects in the same window
+  with an app password (`POST /channels/email/imap` → Zernio checks it before
+  storing anything; Inbora never stores the password). No Google approval of
+  our own is needed. Email starts with **only the team answering**
   (the AI draft is available); the business can switch the agent on.
 - **Incoming mail:** `message.received` → the full email is read from Zernio
   (only the new text, without the quoted earlier mail) and added to the inbox.
