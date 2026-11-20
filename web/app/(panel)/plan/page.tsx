@@ -1,3 +1,4 @@
+import PlanPicker from "@/components/PlanPicker";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
 
@@ -14,6 +15,7 @@ export default async function PlanPage() {
   const pct = plan.conversation_quota
     ? Math.min(100, Math.round((plan.conversations_used / plan.conversation_quota) * 100))
     : 0;
+  const full = plan.conversations_used >= plan.conversation_quota;
   const monthly = plan.billing_period === "monthly";
 
   return (
@@ -24,7 +26,7 @@ export default async function PlanPage() {
       <div className="card">
         <h2>{t.plan.conversations}</h2>
         <div className="meter" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <span style={{ width: `${pct}%` }} />
+          <span className={full ? "meter-full" : undefined} style={{ width: `${pct}%` }} />
         </div>
         <div className="hint">
           {nf.format(plan.conversations_used)} {t.plan.used} {t.plan.of} {nf.format(plan.conversation_quota)}{" "}
@@ -35,22 +37,10 @@ export default async function PlanPage() {
               {t.plan.renews} {new Date(plan.period_end).toLocaleDateString(lang)}
             </>
           )}
-          {!monthly && <> · {t.plan.oneTime}</>}
         </div>
+        {full && <p className="plan-full">{t.plan.fullNote}</p>}
       </div>
-      <div className="stats">
-        <div className="card">
-          <div className="stat-label">{t.plan.channels}</div>
-          <div className="stat-value">{nf.format(plan.max_channels)}</div>
-        </div>
-        <div className="card">
-          <div className="stat-label">{t.plan.knowledgeLimit}</div>
-          <div className="stat-value">
-            {nf.format(plan.kb_char_limit)} <span className="hint">{t.plan.characters}</span>
-          </div>
-        </div>
-      </div>
-      <p className="hint">{t.plan.upgradeSoon}</p>
+      <PlanPicker />
     </>
   );
 }

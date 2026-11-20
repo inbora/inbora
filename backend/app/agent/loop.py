@@ -19,6 +19,7 @@ class AgentResult:
     escalated: bool = False
     tools_used: list[str] = field(default_factory=list)
     fallback: bool = False   # True when the customer got the canned "technical problem" text
+    tokens: dict = field(default_factory=dict)   # input / cached / output, for the business's usage
 
 
 def run(
@@ -41,12 +42,23 @@ def run(
     tools = None if as_rep else BOT_TOOLS     # a team member's draft never escalates
     history = list(history)
     deadline = time.monotonic() + get_settings().agent_deadline_seconds
+    tokens = {"input": 0, "cached": 0, "output": 0}
+
+    def done(result: AgentResult) -> AgentResult:
+        result.tokens = tokens
+        return result
 
     for round_no in range(MAX_ROUNDS):
         if round_no and time.monotonic() > deadline:
             print("[agent] reply deadline passed between tool rounds")
             break
         resp = gemini.generate(history, system, tools, deadline=deadline)
+        meta = getattr(resp, "usage_metadata", None)
+        if meta is not None:
+            tokens["input"] += getattr(meta, "prompt_token_count", 0) or 0
+            tokens["cached"] += getattr(meta, "cached_content_token_count", 0) or 0
+            tokens["output"] += (getattr(meta, "candidates_token_count", 0) or 0) + \
+                (getattr(meta, "thoughts_token_count", 0) or 0)
         content = resp.candidates[0].content
         history.append(content)
         parts = content.parts or []
@@ -60,9 +72,9 @@ def run(
             if not text or guards.looks_like_raw_output(text):
                 if text:
                     print(f"[agent] raw output blocked: {text[:200]}")
-                return AgentResult(guards.fallback(ctx.default_language), toolbox.escalated,
-                                   toolbox.calls, fallback=True)
-            return AgentResult(text, toolbox.escalated, toolbox.calls)
+                return done(AgentResult(guards.fallback(ctx.default_language), toolbox.escalated,
+                                        toolbox.calls, fallback=True))
+            return done(AgentResult(text, toolbox.escalated, toolbox.calls))
 
         responses = []
         for p in calls:
@@ -72,5 +84,5 @@ def run(
                 name=fc.name, response={"result": result})))
         history.append(types.Content(role="user", parts=responses))
 
-    return AgentResult(guards.fallback(ctx.default_language), toolbox.escalated,
-                       toolbox.calls, fallback=True)
+    return done(AgentResult(guards.fallback(ctx.default_language), toolbox.escalated,
+                            toolbox.calls, fallback=True))

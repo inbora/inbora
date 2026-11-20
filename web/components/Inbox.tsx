@@ -520,8 +520,8 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
       });
       setUndoText(text);
       setText(r.text);
-    } catch {
-      setError(ti.draftError);
+    } catch (e) {
+      setError(e instanceof ApiError && e.status === 402 ? ti.draftQuota : ti.draftError);
     } finally {
       setBusy("");
     }

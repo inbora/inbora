@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db
+from .. import db, usage
 from ..auth import CurrentUser, current_user
 
 router = APIRouter()
@@ -19,30 +19,25 @@ def me(user: CurrentUser = Depends(current_user)):
         raise HTTPException(404, "No business found for this user")
     tenant = membership["tenants"]
 
+    cur = usage.current(tenant["id"])        # also moves a monthly plan into the current month
     sub = db.select_one("subscriptions", {
         "select": "limits,period_start,period_end,status",
         "tenant_id": f"eq.{tenant['id']}",
         "status": "eq.active",
     })
-    usage = db.select_one("usage_counters", {
-        "select": "conversations_used,bonus_conversations,period_start",
-        "tenant_id": f"eq.{tenant['id']}",
-        "order": "period_start.desc",
-    })
 
     plan = None
     if sub:
         limits = sub["limits"]
-        quota = int(limits.get("conversation_quota", 0))
-        bonus = int((usage or {}).get("bonus_conversations", 0))
         plan = {
             "code": limits.get("plan_code"),
             "name": limits.get("plan_name"),
             "billing_period": limits.get("billing_period"),
-            "conversation_quota": quota + bonus,
-            "conversations_used": int((usage or {}).get("conversations_used", 0)),
+            "conversation_quota": int(cur.get("quota") or 0),
+            "conversations_used": int(cur.get("used") or 0),
             "max_channels": limits.get("max_channels"),
             "kb_char_limit": limits.get("kb_char_limit"),
+            "seats": limits.get("seats"),
             "show_branding": bool(limits.get("show_branding", True)),
             "period_end": sub["period_end"],
         }

@@ -430,3 +430,21 @@ a.handle:hover { color: var(--accent); }
 .modal .del-trash { margin: 14px 0 18px; font-size: 14px; color: #3d4450; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { filter: brightness(.95); }
+
+/* ── Plans (Step 7) ─────────────────────────────── */
+.section-title { font-size: 16px; margin: 24px 0 10px; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.plan-card { margin-bottom: 0; display: flex; flex-direction: column; gap: 10px; }
+.plan-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.plan-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.plan-head h3 { margin: 0; font-size: 16px; }
+.plan-price b { font-size: 22px; }
+.plan-features { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: #3d4450; flex: 1; }
+.plan-features li::before { content: "✓"; color: var(--accent); font-weight: 700; margin-inline-end: 6px; }
+.plan-card .btn { width: 100%; }
+.plan-requested { text-align: center; font-size: 13px; font-weight: 600; color: #08603f; background: var(--accent-soft); border-radius: 8px; padding: 8px; }
+.plan-request .link-btn { margin-inline-start: 4px; }
+.plan-full { margin: 10px 0 0; font-size: 14px; color: var(--warn-ink); }
+.quota-alert a { font-weight: 700; color: inherit; text-decoration: underline; }
+.req-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.plan-select { height: 30px; border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; font: inherit; font-size: 13px; background: #fff; }

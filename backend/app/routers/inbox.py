@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from .. import channels, db, jobs, media
+from .. import channels, db, jobs, media, usage
 from ..agent import context, guards, history
 from ..agent import loop as agent_loop
 from ..agent.gemini import AgentUnavailable
@@ -243,6 +243,8 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
 
     channel = db.select_one("channels", {"select": "type", "id": f"eq.{t['channel_id']}"}) or {}
     contact = db.select_one("contacts", {"select": "name", "id": f"eq.{t['contact_id']}"}) or {}
+    if not usage.allowed(usage.consume(tenant_id, thread_id)):
+        raise HTTPException(402, detail={"code": "quota", "message": "All conversations on your plan are used."})
     ctx = context.load(tenant_id)
     me = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}
     toolbox = Toolbox(tenant_id, thread_id=thread_id, dry_run=True)
@@ -254,6 +256,7 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
                                 rep_text=(body.current_text or "").strip() or None)
     except AgentUnavailable:
         raise HTTPException(503, "The assistant isn't available right now. Try again in a moment.")
+    usage.record_tokens(tenant_id, result.tokens)
     if result.fallback:
         raise HTTPException(503, "The assistant couldn't write a draft. Try again in a moment.")
     return {"text": guards.greeting_on_own_line(result.text)}

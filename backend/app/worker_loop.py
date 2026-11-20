@@ -8,7 +8,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import alerts, channels, db, email_in, jobs, media, zernio
+from . import alerts, channels, db, email_in, jobs, media, usage, zernio
 from .agent import context, guards, history
 from .agent import loop as agent_loop
 from .agent.gemini import AgentUnavailable
@@ -44,11 +44,24 @@ def handle_reply(payload: dict) -> str:
     if not convo or convo[-1]["role"] != "user":
         return "already-answered"
 
+    # The plan's conversation quota: a new conversation counts once; when the
+    # quota is used up, the team gets it instead of the agent.
+    if not usage.allowed(usage.consume(thread["tenant_id"], thread_id)):
+        changed = db.update("threads", {"id": f"eq.{thread_id}", "status": "eq.bot"},
+                            {"status": "escalated", "escalated_at": _now(), "escalation_reason": usage.OVER_REASON})
+        if changed:
+            db.insert("messages", {"tenant_id": thread["tenant_id"], "thread_id": thread_id, "role": "system",
+                                   "content": f"Escalated to the team: {usage.OVER_REASON}"})
+            alerts.queue_alert(thread["tenant_id"], thread_id, "escalated", usage.OVER_REASON)
+        return "over-quota"
+
     contact = db.select_one("contacts", {"select": "*", "id": f"eq.{thread['contact_id']}"}) or {}
     ctx = context.load(thread["tenant_id"])
     toolbox = Toolbox(thread["tenant_id"], thread_id=thread_id, contact_id=contact.get("id"))
     result = agent_loop.run(ctx, history.build(rows), toolbox,
                             channel=channel["type"], customer_name=contact.get("name"))
+
+    usage.record_tokens(thread["tenant_id"], result.tokens)
 
     # Re-check: did a newer message arrive, or a person take over, meanwhile?
     fresh = db.select_one("threads", {"select": "reply_epoch,status", "id": f"eq.{thread_id}"}) or {}
@@ -115,7 +128,8 @@ def _on_final_failure(job: dict, error: str) -> None:
 
 
 HANDLERS = {"reply": handle_reply, "alert": alerts.handle_alert, "media": handle_media,
-            "channel_alert": alerts.handle_channel_alert, "email_trash": email_in.handle_trash}
+            "channel_alert": alerts.handle_channel_alert, "email_trash": email_in.handle_trash,
+            "usage_alert": usage.handle_usage_alert}
 
 
 def process(job: dict) -> None:

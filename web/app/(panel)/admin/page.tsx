@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import AdminTenants from "@/components/AdminTenants";
 import { apiGet } from "@/lib/api";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
@@ -14,20 +15,25 @@ type Plan = {
   kb_char_limit: number;
   active: boolean;
 };
-type Tenant = { id: string; name: string; slug: string; status: string; created_at: string; plan: string | null };
+type Tenant = { id: string; name: string; slug: string; status: string; created_at: string; plan: string | null;
+  plan_id: string | null; used: number; quota: number };
+type Request = { id: string; tenant_id: string; tenant: string; plan_id: string; plan: string; current: string | null; created_at: string };
 
 export default async function AdminPage() {
   const { t, lang } = await getI18n();
   const me = await getMe();
   if (!me?.user.is_super_admin) notFound();
 
-  const data = await apiGet<{ plans: Plan[]; tenants: Tenant[] }>("/admin/overview");
+  const data = await apiGet<{ plans: Plan[]; tenants: Tenant[]; requests: Request[] }>("/admin/overview");
   const nf = new Intl.NumberFormat(lang);
 
   return (
     <>
       <h1>{t.admin.title}</h1>
       <p className="hint">{t.admin.editSoon}</p>
+
+      <AdminTenants plans={(data?.plans ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        tenants={data?.tenants ?? []} requests={data?.requests ?? []} />
 
       <div className="card">
         <h2>{t.admin.plans}</h2>
@@ -59,33 +65,6 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      <div className="card">
-        <h2>
-          {t.admin.tenants} ({nf.format(data?.tenants.length ?? 0)})
-        </h2>
-        <div className="table-wrap">
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>{t.admin.name}</th>
-                <th>{t.admin.plan}</th>
-                <th>{t.admin.status}</th>
-                <th>{t.admin.created}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.tenants ?? []).map((x) => (
-                <tr key={x.id}>
-                  <td>{x.name}</td>
-                  <td>{x.plan ?? "—"}</td>
-                  <td>{x.status}</td>
-                  <td>{new Date(x.created_at).toLocaleDateString(lang)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </>
   );
 }

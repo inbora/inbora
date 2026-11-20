@@ -252,6 +252,35 @@ Table Editor → `kb_articles` (or with the SQL in the Step 2 notes).
 - **Limits:** Gmail 200 emails/day (Workspace 500), Outlook 1,000, IMAP 200;
   a reply over the limit shows the reason in the inbox.
 
+## Step 7 — Plans, conversation quota and billing layer
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0009_plans_usage.sql`.
+Nothing else (`BILLING_PROVIDER` defaults to `manual`).
+
+- **What counts:** a conversation is 24 hours from the first AI answer (or AI
+  draft) in a thread; more messages in those 24 hours don't count again.
+  Conversations only the team answers (no AI) never count.
+- **Hard cap:** when the plan's conversations are used up, the agent stops
+  answering *new* conversations: they go to "Needs you" with the reason, and
+  the team is alerted. Conversations already counted keep their agent until
+  their 24 hours end. Generate reply is blocked the same way. Monthly plans
+  start counting again each month (the period moves forward by itself); Free
+  is 50 in total.
+- **Alerts:** email + push to the team at 80% and at 100% (once each per
+  period), and a banner on every panel page while the limit is reached.
+- **Plan page:** usage bar and the public plans; "Choose this plan" sends a
+  request. The super-admin is emailed (`platform_admins`) and sees it on the
+  Super-admin page: Approve, Dismiss, or change any business's plan from the
+  list. A plan change starts a new subscription with a **snapshot** of the
+  plan's limits and a fresh count; editing a plan never changes current
+  subscribers.
+- **Billing layer:** `backend/app/billing.py` — `BillingProvider`
+  (`create_checkout`, `cancel`, `handle_webhook`) with the `manual` provider.
+  A payment provider (e.g. Paddle) plugs in as another provider; its webhook
+  goes to `/billing/webhook/<name>`.
+- **AI cost tracking:** input, cached and output tokens per business per
+  period are stored in `usage_counters` (`ai_*_tokens`).
+
 ---
 
 ## Run locally

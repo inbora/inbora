@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # this often, to catch anything a webhook missed. 0 = never.
     email_poll_seconds: int = 180
 
+    # Plans (Step 7): who handles plan changes. "manual" = the business asks,
+    # the super-admin assigns the plan. A payment provider plugs in later.
+    billing_provider: str = "manual"
+
     # Background worker. true = runs inside the API process (no extra service).
     embedded_worker: bool = True
     worker_concurrency: int = 4

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, worker_loop
 from .config import get_settings
-from .routers import admin, agent, channels, inbox, knowledge, me, push, widget, zernio_webhook
+from .routers import admin, agent, billing, channels, inbox, knowledge, me, push, widget, zernio_webhook
 
 settings = get_settings()
 
@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     worker_loop.stop_embedded()
 
 
-app = FastAPI(title="Inbora API", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="Inbora API", version="0.7.0", lifespan=lifespan)
 
 
 class SplitCORS:
@@ -58,6 +58,7 @@ def health():
 
 app.include_router(me.router)
 app.include_router(admin.router)
+app.include_router(billing.router)
 app.include_router(agent.router)
 app.include_router(knowledge.router)
 app.include_router(channels.router)

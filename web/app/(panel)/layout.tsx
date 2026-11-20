@@ -37,6 +37,12 @@ export default async function PanelLayout({ children }: { children: React.ReactN
               <Link href="/channels">{t.panel.channelAlertLink} →</Link>
             </div>
           )}
+          {me?.plan && me.plan.conversations_used >= me.plan.conversation_quota && (
+            <div className="alert alert-warn quota-alert">
+              {t.panel.quotaAlert.replace("{n}", String(me.plan.conversation_quota))}{" "}
+              <Link href="/plan">{t.panel.quotaAlertLink} →</Link>
+            </div>
+          )}
           {children}
         </main>
       </div>

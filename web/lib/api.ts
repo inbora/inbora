@@ -15,6 +15,7 @@ export type Me = {
     conversations_used: number;
     max_channels: number;
     kb_char_limit: number;
+    seats?: number;
     show_branding: boolean;
     period_end: string | null;
   } | null;
