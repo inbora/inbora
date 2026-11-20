@@ -13,7 +13,8 @@ export type Article = {
   sort_order: number;
 };
 type Listing = { articles: Article[]; used: number; limit: number };
-type Draft = { id: string | null; title: string; body: string; enabled: boolean };
+type Draft = { id: string | null; title: string; body: string; enabled: boolean; fromTemplate?: boolean };
+type Templates = Record<string, Record<string, { title: string; body: string }>>;
 
 const TEMPLATE_KEYS = ["shipping", "returns", "payment", "contact", "hours"] as const;
 const hasBrackets = (s: string) => /\[[^\]\n]{1,60}\]/.test(s);
@@ -27,6 +28,7 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [tplLang, setTplLang] = useState<string>(lang);
+  const [templates, setTemplates] = useState<Templates | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -59,7 +61,9 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
   const save = () =>
     run(async () => {
       if (!draft) return;
-      const body = JSON.stringify({ title: draft.title, body: draft.body, enabled: draft.enabled });
+      // A template still holding [brackets] is saved switched off, so the agent never answers with them.
+      const enabled = draft.fromTemplate ? !hasBrackets(draft.body) : draft.enabled;
+      const body = JSON.stringify({ title: draft.title, body: draft.body, enabled });
       if (draft.id) await api(`/knowledge/${draft.id}`, { method: "PUT", body });
       else await api("/knowledge", { method: "POST", body });
       setDraft(null);
@@ -81,11 +85,15 @@ export default function KnowledgeManager({ initial }: { initial: Listing }) {
     });
   };
 
+  // The chosen template opens in the editor as a new article.
   const addTemplates = () =>
     run(async () => {
-      await api("/knowledge/templates", { method: "POST", body: JSON.stringify({ keys: [picked], language: tplLang }) });
+      if (!picked) return;
+      const all = templates ?? (await api<{ templates: Templates }>("/knowledge/templates")).templates;
+      setTemplates(all);
+      const tpl = all[tplLang][picked];
+      setDraft({ id: null, title: tpl.title, body: tpl.body, enabled: true, fromTemplate: true });
       setShowTemplates(false);
-      await reload();
     });
 
   // What's left of the plan's limit while writing (other switched-on articles + this one).
