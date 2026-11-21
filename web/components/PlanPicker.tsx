@@ -166,10 +166,7 @@ export default function PlanPicker() {
                 <b dir="ltr">${nf.format(x.price_usd)}</b> <span className="hint">{p.perMonthShort}</span>
               </div>
               <ul className="plan-features">
-                <li>
-                  {fill(p.aiConvMonth, { n: nf.format(x.conversation_quota) })}
-                  <span className="feature-note">{p.aiNote}</span>
-                </li>
+                <li>{fill(p.aiConvMonth, { n: nf.format(x.conversation_quota) })}</li>
                 <li>{p.humanUnlimited}</li>
                 <li>{fill(x.max_channels >= ALL_CHANNELS ? p.allChannels : p.anyChannels, { n: x.max_channels })}</li>
                 <li>{fill(p.knowledge, { n: nf.format(x.kb_char_limit) })}</li>
