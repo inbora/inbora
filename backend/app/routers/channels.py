@@ -24,6 +24,7 @@ def _out(c: dict) -> dict:
         "id": c["id"], "type": c["type"], "mode": c["mode"], "status": c["status"],
         "display_name": c.get("display_name"), "widget_key": c.get("widget_key"),
         "color": cfg.get("color", DEFAULT_COLOR), "position": cfg.get("position", "right"),
+        "shape": cfg.get("shape", "circle"),
         "created_at": c.get("created_at"), "updated_at": c.get("updated_at"),
     }
 
@@ -69,6 +70,7 @@ class ChannelUpdate(BaseModel):
     mode: Literal["auto", "human"] | None = None
     color: str | None = Field(default=None, max_length=7)
     position: Literal["right", "left"] | None = None
+    shape: Literal["circle", "pill", "rect"] | None = None      # the website chat button
     enabled: bool | None = None
 
 
@@ -80,7 +82,7 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
     values: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if body.mode is not None:
         values["mode"] = body.mode
-    if body.color is not None or body.position is not None:
+    if body.color is not None or body.position is not None or body.shape is not None:
         cfg = dict(ch.get("config") or {})
         if body.color is not None:
             if not _COLOR.match(body.color):
@@ -88,6 +90,8 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
             cfg["color"] = body.color.lower()
         if body.position is not None:
             cfg["position"] = body.position
+        if body.shape is not None:
+            cfg["shape"] = body.shape
         values["config"] = cfg
     if body.enabled is not None and ch["type"] != "widget":
         raise HTTPException(422, "Use Connect / Disconnect for this channel")
@@ -101,6 +105,9 @@ def update_channel(channel_id: str, body: ChannelUpdate, tenant_id: str = Depend
         elif not body.enabled:
             values["status"] = "disconnected"
     changed = db.update("channels", {"id": f"eq.{channel_id}", "tenant_id": f"eq.{tenant_id}"}, values)
+    if ch["type"] == "widget":
+        from .widget import forget
+        forget(ch.get("widget_key"))        # the website shows the change on its next page load
     return _out(changed[0])
 
 

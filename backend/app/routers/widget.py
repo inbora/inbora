@@ -54,6 +54,12 @@ _cache: dict[str, tuple[float, dict | None]] = {}
 _CACHE_SECONDS = 30
 
 
+def forget(key: str | None) -> None:
+    """Settings changed in the panel: the website gets them on its next load."""
+    if key:
+        _cache.pop(key, None)
+
+
 def _load(key: str) -> dict:
     if not _KEY.match(key):
         raise HTTPException(404, "Unknown chat")
@@ -99,6 +105,7 @@ def config(key: str):
         "greeting": (settings.get("greeting") or "").strip() or default_for(lang, "greeting"),
         "color": cfg.get("color", "#0e9f6e"),
         "position": cfg.get("position", "right"),
+        "shape": cfg.get("shape", "circle"),
         "branding": bool(plans.limits(tid).get("show_branding", True)),
     }
 

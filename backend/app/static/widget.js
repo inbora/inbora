@@ -14,17 +14,17 @@
   if (!KEY) return;
 
   var T = {
-    en: { placeholder: "Write a message…", send: "Send", open: "Open chat", close: "Close chat",
+    en: { placeholder: "Write a message…", send: "Send", open: "Open chat", label: "Chat with us", close: "Close chat",
           team: "Team", today: "Today", yesterday: "Yesterday", powered: "Powered by",
           error: "The message didn't go through. Please try again.", busy: "You're sending messages too quickly. Please wait a moment.",
           subtitle: "We're here to help", teamOn: "A team member is with you",
           attach: "Attach a photo", remove: "Remove photo", tooBig: "Photos can be up to 5 MB.", badType: "Only photos (JPG, PNG, WEBP, GIF) can be sent." },
-    he: { placeholder: "כתבו הודעה…", send: "שליחה", open: "פתיחת צ׳אט", close: "סגירת הצ׳אט",
+    he: { placeholder: "כתבו הודעה…", send: "שליחה", open: "פתיחת צ׳אט", label: "דברו איתנו", close: "סגירת הצ׳אט",
           team: "צוות", today: "היום", yesterday: "אתמול", powered: "מופעל על ידי",
           error: "ההודעה לא נשלחה. נסו שוב.", busy: "שלחתם הרבה הודעות ברצף. חכו רגע ונסו שוב.",
           subtitle: "כאן כדי לעזור", teamOn: "נציג מהצוות איתכם",
           attach: "צירוף תמונה", remove: "הסרת התמונה", tooBig: "תמונות עד 5MB.", badType: "אפשר לשלוח רק תמונות (JPG, PNG, WEBP, GIF)." },
-    ar: { placeholder: "اكتب رسالة…", send: "إرسال", open: "فتح الدردشة", close: "إغلاق الدردشة",
+    ar: { placeholder: "اكتب رسالة…", send: "إرسال", open: "فتح الدردشة", label: "تحدث معنا", close: "إغلاق الدردشة",
           team: "الفريق", today: "اليوم", yesterday: "أمس", powered: "مدعوم من",
           error: "لم تُرسل الرسالة. حاول مرة أخرى.", busy: "أرسلت رسائل كثيرة بسرعة. انتظر لحظة من فضلك.",
           subtitle: "نحن هنا للمساعدة", teamOn: "أحد أعضاء الفريق معك",
@@ -91,6 +91,9 @@
     var t = T[lang], rtl = lang === "he" || lang === "ar";
     var color = /^#[0-9a-fA-F]{6}$/.test(cfg.color || "") ? cfg.color : "#0e9f6e";
     var side = cfg.position === "left" ? "left" : "right";
+    // The button: a circle, or a pill / rectangle with "Chat with us" in the site's language.
+    var shape = cfg.shape === "pill" || cfg.shape === "rect" ? cfg.shape : "circle";
+    var wide = shape !== "circle";
 
     var host = document.createElement("div");
     host.setAttribute("data-inbora", "");
@@ -104,6 +107,10 @@
       "*{box-sizing:border-box;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,'Noto Sans Hebrew','Noto Sans Arabic',sans-serif}" +
       ".btn{position:fixed;bottom:20px;" + side + ":20px;width:58px;height:58px;border-radius:50%;border:0;cursor:pointer;background:" + color + ";color:" + textOn(color) + ";box-shadow:0 6px 24px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;transition:transform .15s}" +
       ".btn:hover{transform:scale(1.06)}.btn svg{width:28px;height:28px;fill:currentColor}" +
+      ".btn.wide{width:auto;height:52px;padding:0 22px 0 17px;gap:9px;font-size:15px;font-weight:600;line-height:1;white-space:nowrap;border-radius:" + (shape === "pill" ? "26px" : "6px") + "}" +
+      ".btn.wide:hover{transform:translateY(-2px)}.btn.wide svg{width:22px;height:22px;flex-shrink:0}" +
+      (rtl ? ".btn.wide{padding:0 17px 0 22px}" : "") +
+      ".btn.wide .dot{top:-4px;" + (side === "right" ? "right" : "left") + ":-4px}" +
       ".dot{position:absolute;top:6px;" + (side === "right" ? "right" : "left") + ":6px;width:12px;height:12px;border-radius:50%;background:#e02424;border:2px solid #fff;display:none}" +
       ".dot.on{display:block}" +
       ".panel{position:fixed;bottom:90px;" + side + ":20px;width:370px;max-width:calc(100vw - 24px);height:560px;max-height:calc(100vh - 110px);background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.24);display:none;flex-direction:column;overflow:hidden;color:#14161a;font-size:14px}" +
@@ -137,7 +144,7 @@
       ".send{flex-shrink:0;width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;background:" + color + ";color:" + textOn(color) + ";display:flex;align-items:center;justify-content:center}" +
       ".send:disabled{opacity:.5;cursor:default}.send svg{width:20px;height:20px;fill:currentColor" + (rtl ? ";transform:scaleX(-1)" : "") + "}" +
       ".brand{text-align:center;font-size:11px;color:#8a919b;padding:0 0 8px;background:#fff}.brand a{color:#5d6470;font-weight:600;text-decoration:none}" +
-      "@media (max-width:480px){.panel{bottom:0;" + side + ":0;width:100vw;max-width:100vw;height:100%;max-height:100%;border-radius:0}.panel.open~.btn{display:none}}" +
+      "@media (max-width:480px){.btn.wide{height:46px;padding:0 16px;font-size:14px}.panel{bottom:0;" + side + ":0;width:100vw;max-width:100vw;height:100%;max-height:100%;border-radius:0}.panel.open~.btn{display:none}}" +
       "</style>" +
       '<div class="panel" role="dialog" dir="' + (rtl ? "rtl" : "ltr") + '" lang="' + lang + '">' +
       '<div class="head"><div class="who"><div class="name"></div><div class="sub"></div></div>' +
@@ -150,7 +157,8 @@
       '<button class="send" aria-label="' + esc(t.send) + '"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg></button></div>' +
       (cfg.branding ? '<div class="brand">' + esc(t.powered) + ' <a href="https://inbora.ai" target="_blank" rel="noopener">Inbora</a></div>' : "") +
       "</div>" +
-      '<button class="btn" aria-label="' + esc(t.open) + '"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.04 2 11c0 2.7 1.34 5.11 3.46 6.74L4.5 22l4.78-2.04c.86.2 1.77.31 2.72.31 5.52 0 10-4.04 10-9S17.52 2 12 2z"/></svg><span class="dot"></span></button>';
+      '<button class="btn' + (wide ? " wide" : "") + '" aria-label="' + esc(t.open) + '"' + (rtl ? ' dir="rtl"' : "") + '><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.04 2 11c0 2.7 1.34 5.11 3.46 6.74L4.5 22l4.78-2.04c.86.2 1.77.31 2.72.31 5.52 0 10-4.04 10-9S17.52 2 12 2z"/></svg>' +
+      (wide ? "<span>" + esc(t.label) + "</span>" : "") + '<span class="dot"></span></button>';
 
     var $ = function (s) { return root.querySelector(s); };
     var panel = $(".panel"), list = $(".list"), typing = $(".typing"), input = $("textarea"),

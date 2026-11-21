@@ -552,7 +552,6 @@ a.handle:hover { color: var(--accent); }
 .plan-price b { font-size: 28px; }
 .plan-features li.off { color: var(--muted); }
 .plan-features li.off::before { content: "·"; color: var(--muted); }
-.feature-note { display: block; font-size: 12px; color: var(--muted); margin-inline-start: 18px; }
 .plan-note { font-size: 13px; color: var(--warn-ink); background: #fff7ed; border-radius: 8px; padding: 8px 10px; }
 .trial-card .meter { margin: 12px 0 6px; }
 .trial-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -587,3 +586,17 @@ a.handle:hover { color: var(--accent); }
   .custom-grid { grid-template-columns: 1fr; }
 }
 .topbar-meta .badge { white-space: nowrap; }
+
+/* Website chat: button shape */
+.shape-tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+.shape-tile { flex: 1; min-width: 150px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; background: #fff; }
+.shape-tile.on { border: 2px solid var(--accent); background: #f2faf6; padding: 11px; }
+.shape-preview { height: 44px; display: flex; align-items: center; }
+.shape-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.18); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.shape-btn svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+.shape-circle { width: 40px; height: 40px; border-radius: 50%; }
+.shape-pill, .shape-rect { height: 36px; padding: 0 14px 0 11px; }
+[dir="rtl"] .shape-pill, [dir="rtl"] .shape-rect { padding: 0 11px 0 14px; }
+.shape-pill { border-radius: 18px; }
+.shape-rect { border-radius: 5px; }
+.shape-name { display: flex; align-items: center; gap: 6px; font-size: 14px; }

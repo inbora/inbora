@@ -16,7 +16,16 @@ export type Channel = {
   display_name: string | null;
   color: string;
   position: "right" | "left";
+  shape?: Shape;
 };
+type Shape = "circle" | "pill" | "rect";
+const SHAPES: Shape[] = ["circle", "pill", "rect"];
+// Dark text on a light colour, like the widget itself.
+const textOn = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255 > 0.6 ? "#14161a" : "#fff";
+};
+const CHAT_ICON = "M12 2C6.48 2 2 6.04 2 11c0 2.7 1.34 5.11 3.46 6.74L4.5 22l4.78-2.04c.86.2 1.77.31 2.72.31 5.52 0 10-4.04 10-9S17.52 2 12 2z";
 
 export type ChannelsData = { channels: Channel[]; max_channels: number; used: number; messaging_ready?: boolean };
 
@@ -31,6 +40,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
   const [form, setForm] = useState({
     color: widget?.color ?? "#0e9f6e",
     position: widget?.position ?? "right",
+    shape: widget?.shape ?? ("circle" as Shape),
     mode: widget?.mode ?? "auto",
   });
   const [busy, setBusy] = useState(false);
@@ -92,7 +102,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
     setStatus("");
     try {
       const w = await api<Channel>("/channels/widget", { method: "POST" });
-      setForm({ color: w.color, position: w.position, mode: w.mode });
+      setForm({ color: w.color, position: w.position, shape: w.shape ?? "circle", mode: w.mode });
       await reload();
       setOpenRow("widget");          // show the snippet right away
     } catch (e) {
@@ -175,6 +185,27 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
                 </div>
               </div>
               <div className="field">
+                <label>{c.shape}</label>
+                <div className="shape-tiles" role="radiogroup" aria-label={c.shape}>
+                  {SHAPES.map((s) => (
+                    <label key={s} className={`shape-tile${form.shape === s ? " on" : ""}`}>
+                      <span className="shape-preview">
+                        <span className={`shape-btn shape-${s}`}
+                          style={(() => { const bg = /^#[0-9a-fA-F]{6}$/.test(form.color) ? form.color : "#0e9f6e"; return { background: bg, color: textOn(bg) }; })()}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d={CHAT_ICON} /></svg>
+                          {s !== "circle" && <span>{c.chatWithUs}</span>}
+                        </span>
+                      </span>
+                      <span className="shape-name">
+                        <input type="radio" name="w-shape" checked={form.shape === s} onChange={() => setForm({ ...form, shape: s })} />
+                        {c.shapes[s]}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <span className="hint">{c.shapeHint}</span>
+              </div>
+              <div className="field">
                 <label>{c.whoAnswers}</label>
                 {(["auto", "human"] as const).map((m) => (
                   <label key={m} className="check">
@@ -189,7 +220,7 @@ export default function ChannelsManager({ initial, branding }: { initial: Channe
                 {status === "error" && <span className="error-text">{c.error}</span>}
                 <button className="link-btn link-danger" disabled={busy} onClick={() => update({ enabled: false })}>{c.turnOff}</button>
                 <button className="btn" disabled={busy || !/^#[0-9a-fA-F]{6}$/.test(form.color)}
-                  onClick={() => update({ color: form.color, position: form.position, mode: form.mode })}>
+                  onClick={() => update({ color: form.color, position: form.position, shape: form.shape, mode: form.mode })}>
                   {c.save}
                 </button>
               </div>
