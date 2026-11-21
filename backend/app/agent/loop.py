@@ -19,7 +19,7 @@ class AgentResult:
     escalated: bool = False
     tools_used: list[str] = field(default_factory=list)
     fallback: bool = False   # True when the customer got the canned "technical problem" text
-    tokens: dict = field(default_factory=dict)   # input / cached / output, for the business's usage
+    tokens: dict = field(default_factory=dict)   # {model: {input, cached, output}}, for the business's usage
 
 
 def run(
@@ -42,7 +42,7 @@ def run(
     tools = None if as_rep else BOT_TOOLS     # a team member's draft never escalates
     history = list(history)
     deadline = time.monotonic() + get_settings().agent_deadline_seconds
-    tokens = {"input": 0, "cached": 0, "output": 0}
+    tokens: dict = {}
 
     def done(result: AgentResult) -> AgentResult:
         result.tokens = tokens
@@ -53,12 +53,7 @@ def run(
             print("[agent] reply deadline passed between tool rounds")
             break
         resp = gemini.generate(history, system, tools, deadline=deadline)
-        meta = getattr(resp, "usage_metadata", None)
-        if meta is not None:
-            tokens["input"] += getattr(meta, "prompt_token_count", 0) or 0
-            tokens["cached"] += getattr(meta, "cached_content_token_count", 0) or 0
-            tokens["output"] += (getattr(meta, "candidates_token_count", 0) or 0) + \
-                (getattr(meta, "thoughts_token_count", 0) or 0)
+        gemini.tokens_of(resp, tokens)
         content = resp.candidates[0].content
         history.append(content)
         parts = content.parts or []

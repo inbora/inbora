@@ -77,14 +77,53 @@ def over_reason(res: dict) -> str:
 
 
 def record_tokens(tenant_id: str, tokens: dict | None) -> None:
-    """Add the AI tokens one answer used to the business's current period."""
-    if not tokens or not any(tokens.values()):
-        return
+    """Add the AI tokens one answer used ({model: {input, cached, output}}) to
+    the business's current period, per model."""
+    for model, t in (tokens or {}).items():
+        if not isinstance(t, dict) or not any(t.values()):
+            continue
+        args = {"p_tenant": tenant_id, "p_input": int(t.get("input", 0)),
+                "p_cached": int(t.get("cached", 0)), "p_output": int(t.get("output", 0))}
+        try:
+            db.rpc("add_ai_tokens", {**args, "p_model": model})
+        except Exception as e:  # noqa: BLE001 — migration 0013 not run: keep the totals at least
+            print(f"[usage] could not record tokens per model (is migration 0013 run?): {e}")
+            try:
+                db.rpc("add_ai_usage", args)
+            except Exception as e2:  # noqa: BLE001
+                print(f"[usage] could not record tokens: {e2}")
+
+
+def _prices() -> dict[str, list[float]]:
+    import json
     try:
-        db.rpc("add_ai_usage", {"p_tenant": tenant_id, "p_input": int(tokens.get("input", 0)),
-                                "p_cached": int(tokens.get("cached", 0)), "p_output": int(tokens.get("output", 0))})
-    except Exception as e:  # noqa: BLE001
-        print(f"[usage] could not record tokens: {e}")
+        return {k: [float(x) for x in v] for k, v in json.loads(get_settings().gemini_prices).items()}
+    except (ValueError, TypeError, AttributeError) as e:
+        print(f"[usage] GEMINI_PRICES isn't valid: {e}")
+        return {}
+
+
+def ai_cost(row: dict) -> dict:
+    """USD cost of a usage_counters row: per model at its own price. Tokens
+    from before per-model counting are priced as the first model."""
+    prices = _prices()
+    first = next(iter(prices.values()), [0, 0, 0])
+    by_model = dict(row.get("ai_by_model") or {})
+    known = {k: sum(int(v.get(k, 0)) for v in by_model.values()) for k in ("input", "cached", "output")}
+    rest = {"input": int(row.get("ai_input_tokens") or 0) - known["input"],
+            "cached": int(row.get("ai_cached_tokens") or 0) - known["cached"],
+            "output": int(row.get("ai_output_tokens") or 0) - known["output"]}
+    if any(v > 0 for v in rest.values()):
+        by_model["earlier"] = {k: max(0, v) for k, v in rest.items()}
+    models, total = [], 0.0
+    for model, t in by_model.items():
+        p = prices.get(model) or next((v for k, v in prices.items() if model.startswith(k)), first)
+        i, c, o = int(t.get("input", 0)), int(t.get("cached", 0)), int(t.get("output", 0))
+        cost = (max(0, i - c) * p[0] + c * p[1] + o * p[2]) / 1_000_000
+        total += cost
+        models.append({"model": model, "input": i, "cached": c, "output": o, "usd": round(cost, 4)})
+    models.sort(key=lambda m: -m["usd"])
+    return {"usd": round(total, 4), "models": models}
 
 
 def handle_usage_alert(payload: dict) -> str:

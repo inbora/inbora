@@ -33,6 +33,19 @@ def client() -> genai.Client:
     return _client
 
 
+def tokens_of(resp: types.GenerateContentResponse, into: dict | None = None) -> dict:
+    """{model: {input, cached, output}} for one answer, added to `into`."""
+    into = {} if into is None else into
+    meta = getattr(resp, "usage_metadata", None)
+    if meta is None:
+        return into
+    t = into.setdefault(getattr(resp, "model_version", None) or "unknown", {"input": 0, "cached": 0, "output": 0})
+    t["input"] += getattr(meta, "prompt_token_count", 0) or 0
+    t["cached"] += getattr(meta, "cached_content_token_count", 0) or 0
+    t["output"] += (getattr(meta, "candidates_token_count", 0) or 0) + (getattr(meta, "thoughts_token_count", 0) or 0)
+    return into
+
+
 def models() -> list[str]:
     return [m.strip() for m in get_settings().gemini_models.split(",") if m.strip()]
 
@@ -68,6 +81,7 @@ def generate(history: list[types.Content], system_instruction: str,
                 print(f"[gemini] {name} returned no content (finish_reason={reason}) — trying next")
                 last_error = RuntimeError(f"empty response from {name} (finish_reason={reason})")
                 continue
+            resp.model_version = name        # which model answered (its tokens are priced by it)
             return resp
         except AgentUnavailable:
             raise

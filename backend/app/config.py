@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     # Tried in order; if one fails or is overloaded, the next one answers.
     gemini_models: str = "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-3-flash-preview"
+    # Gemini prices in USD per 1 million tokens: [input, cached input, output].
+    # Used to show each business's AI cost in the Super-admin page. Update them
+    # if Google changes its prices (ai.google.dev/pricing).
+    gemini_prices: str = ('{"gemini-3.1-flash-lite": [0.25, 0.025, 1.50], '
+                          '"gemini-3.5-flash-lite": [0.30, 0.03, 2.50], '
+                          '"gemini-3-flash-preview": [0.50, 0.05, 3.00]}')
     # A model that takes longer than this is abandoned and the next one is tried.
     gemini_timeout_seconds: float = 20
     # Total time one reply may take (all models, all tool rounds) before the

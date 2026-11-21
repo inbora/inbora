@@ -28,14 +28,20 @@ def _now() -> str:
 def overview(_: CurrentUser = Depends(super_admin)):
     # Custom plans made for one business aren't listed (the business row shows them).
     plans = db.select("plans", {"select": "*", "code": "not.like.custom-*", "order": "sort_order.asc,created_at.asc"})
-    tenants = db.select("tenants", {
-        "select": "id,name,slug,status,created_at,"
-                  "subscriptions(status,limits,plan_id,period_start),"
-                  "usage_counters(period_start,conversations_used,bonus_conversations),"
-                  "channels(type,status,display_name),tenant_members(user_id)",
-        "order": "created_at.desc",
-        "limit": "500",
-    })
+    def load(ai_fields: str):
+        return db.select("tenants", {
+            "select": "id,name,slug,status,created_at,"
+                      "subscriptions(status,limits,plan_id,period_start),"
+                      f"usage_counters(period_start,conversations_used,bonus_conversations{ai_fields}),"
+                      "channels(type,status,display_name),tenant_members(user_id)",
+            "order": "created_at.desc",
+            "limit": "500",
+        })
+    try:
+        tenants = load(",ai_input_tokens,ai_cached_tokens,ai_output_tokens,ai_by_model")
+    except Exception as e:  # noqa: BLE001 — migration 0013 not run yet: no per-model cost
+        print(f"[admin] AI cost per model unavailable (is migration 0013 run?): {e}")
+        tenants = load(",ai_input_tokens,ai_cached_tokens,ai_output_tokens")
     rows = []
     for t in tenants:
         active = next((s for s in t.get("subscriptions") or [] if s["status"] == "active"), None) or {}
@@ -56,6 +62,7 @@ def overview(_: CurrentUser = Depends(super_admin)):
             "channels": sorted({c["type"] for c in t.get("channels") or [] if c["status"] == "connected"}),
             "broken": sorted({c["type"] for c in t.get("channels") or [] if c["status"] == "error"}),
             "members": len(t.get("tenant_members") or []),
+            "ai_cost": usage.ai_cost(u),           # this period, in USD, per model
         })
     reqs = db.select("upgrade_requests", {
         "select": "id,tenant_id,plan_id,created_at,tenants(name),plans(name)",

@@ -13,6 +13,11 @@ export type Plan = {
 export type Tenant = {
   id: string; name: string; status: "active" | "suspended"; created_at: string; plan: string | null; plan_id: string | null;
   used: number; quota: number; bonus: number; channels: string[]; broken: string[]; members: number;
+  ai_cost?: AiCost;
+};
+type AiCost = { usd: number; models: { model: string; input: number; cached: number; output: number; usd: number }[] };
+const MODEL_NAMES: Record<string, string> = {
+  "gemini-3.1-flash-lite": "Flash-Lite 3.1", "gemini-3.5-flash-lite": "Flash-Lite 3.5", "gemini-3-flash-preview": "Gemini 3 Flash",
 };
 export type CustomRequest = { id: string; tenant_id: string; tenant: string | null; current: string | null; status: "open" | "offered";
   conversations: number; kb_chars: number; seats: number; notes: string | null; offer_price: number | null;
@@ -145,6 +150,62 @@ function CustomRequests({ rows }: { rows: CustomRequest[] }) {
   );
 }
 
+// ── AI cost (Gemini), per business and in total, for the current period
+
+const usd = (n: number, lang: string) =>
+  new Intl.NumberFormat(lang, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: n > 0 && n < 0.01 ? 4 : 2 }).format(n);
+
+function CostSummary({ tenants }: { tenants: Tenant[] }) {
+  const { t, lang } = useI18n();
+  const a = t.admin;
+  const models = tenants.flatMap((x) => x.ai_cost?.models ?? []);
+  const total = tenants.reduce((n, x) => n + (x.ai_cost?.usd ?? 0), 0);
+  const input = models.reduce((n, m) => n + m.input, 0);
+  const tokens = input + models.reduce((n, m) => n + m.output, 0);
+  const cached = models.reduce((n, m) => n + m.cached, 0);
+  return (
+    <div className="cost-sum">
+      <div><b>{usd(total, lang)}</b>{a.aiCostTotal}</div>
+      <div>
+        <b>{new Intl.NumberFormat(lang).format(tokens)}</b>
+        {fill(a.tokensCached, { pct: input ? Math.round((cached / input) * 100) : 0 })}
+      </div>
+    </div>
+  );
+}
+
+function CostCell({ cost }: { cost?: AiCost }) {
+  const { t, lang } = useI18n();
+  const a = t.admin;
+  // The breakdown floats over the page (the table scrolls sideways and would cut it).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  if (!cost) return <span className="hint">—</span>;
+  const k = new Intl.NumberFormat(lang, { notation: "compact", maximumFractionDigits: 1 });
+  const show = (e: React.SyntheticEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 12, window.innerWidth - 300)) });
+  };
+  return (
+    <span className="cost-cell" tabIndex={0} onMouseEnter={show} onFocus={show}
+      onMouseLeave={() => setPos(null)} onBlur={() => setPos(null)}>
+      <span className="cost-amount">{usd(cost.usd, lang)}</span>
+      {pos && cost.models.length > 0 && (
+        <span className="cost-tip" role="tooltip" style={{ top: pos.top, left: pos.left }}>
+          <b>{a.thisPeriod} · {usd(cost.usd, lang)}</b>
+          {cost.models.map((m) => (
+            <span key={m.model} className="cost-line">
+              {m.model === "earlier" ? a.earlierTokens : MODEL_NAMES[m.model] ?? m.model} — {usd(m.usd, lang)}
+              <span className="cost-tokens" dir="ltr">
+                {fill(a.tokenLine, { in: k.format(m.input), cached: k.format(m.cached), out: k.format(m.output) })}
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Businesses and plan requests
 
 function Businesses({ plans, tenants, requests }: { plans: Plan[]; tenants: Tenant[]; requests: PlanRequest[] }) {
@@ -218,10 +279,11 @@ function Businesses({ plans, tenants, requests }: { plans: Plan[]; tenants: Tena
 
       <div className="card">
         <h2>{a.tenants} ({nf.format(tenants.length)})</h2>
+        <CostSummary tenants={tenants} />
         <div className="table-wrap">
           <table className="grid">
             <thead>
-              <tr><th>{a.name}</th><th>{a.plan}</th><th>{a.usage}</th><th>{a.channels}</th><th>{a.team}</th><th>{a.status}</th><th>{a.created}</th></tr>
+              <tr><th>{a.name}</th><th>{a.plan}</th><th>{a.usage}</th><th>{a.aiCost}</th><th>{a.channels}</th><th>{a.team}</th><th>{a.status}</th><th>{a.created}</th></tr>
             </thead>
             <tbody>
               {tenants.map((x) => (
@@ -240,6 +302,7 @@ function Businesses({ plans, tenants, requests }: { plans: Plan[]; tenants: Tena
                     {x.bonus > 0 && <span className="hint"> (+{nf.format(x.bonus)})</span>}{" "}
                     <button className="link-btn" disabled={!!busy} onClick={() => bonus(x)}>{a.bonus}</button>
                   </td>
+                  <td className="nowrap"><CostCell cost={x.ai_cost} /></td>
                   <td>
                     {x.channels.map((c) => <span key={c} className="pill pill-on ch-pill">{t.inbox.channelNames[c as "widget"] ?? c}</span>)}
                     {x.broken.map((c) => <span key={c} className="pill pill-error ch-pill">{t.inbox.channelNames[c as "widget"] ?? c}</span>)}

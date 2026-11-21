@@ -600,3 +600,13 @@ a.handle:hover { color: var(--accent); }
 .shape-pill { border-radius: 18px; }
 .shape-rect { border-radius: 5px; }
 .shape-name { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+
+/* Super-admin: AI cost */
+.cost-sum { display: flex; gap: 28px; flex-wrap: wrap; margin: 4px 0 14px; }
+.cost-sum div { font-size: 13px; color: var(--muted); }
+.cost-sum b { display: block; font-size: 20px; color: var(--ink, #14161a); }
+.cost-cell { position: relative; display: inline-block; outline: none; }
+.cost-amount { border-bottom: 1px dotted #8a919b; cursor: help; }
+.cost-tip { display: block; position: fixed; z-index: 50; background: #14161a; color: #fff; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; min-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,.25); white-space: normal; }
+.cost-line { display: block; margin-top: 4px; }
+.cost-tokens { display: block; color: #c4c9d1; padding-inline-start: 10px; }

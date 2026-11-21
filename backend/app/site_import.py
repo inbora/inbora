@@ -315,13 +315,7 @@ def write_articles(tenant_id: str, url: str, pages: list[dict], language: str) -
     system = _SYSTEM.format(language=LANGS.get(language, "English"), max_articles=MAX_ARTICLES)
     content = types.Content(role="user", parts=[types.Part(text=f"Website: {url}\n\n" + "\n".join(parts))])
     resp = gemini.generate([content], system, None, json_reply=True, timeout_seconds=90)
-    meta = getattr(resp, "usage_metadata", None)
-    if meta:
-        usage.record_tokens(tenant_id, {
-            "input": getattr(meta, "prompt_token_count", 0) or 0,
-            "cached": getattr(meta, "cached_content_token_count", 0) or 0,
-            "output": (getattr(meta, "candidates_token_count", 0) or 0) + (getattr(meta, "thoughts_token_count", 0) or 0),
-        })
+    usage.record_tokens(tenant_id, gemini.tokens_of(resp))
     raw = (resp.text or "").strip()
     raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
     try:

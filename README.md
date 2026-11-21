@@ -336,6 +336,22 @@ Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
   the business, valid 14 days). "Accept offer" makes a private plan for that
   business and moves it there; you get an email to arrange payment.
 
+## AI cost per business
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0013_ai_cost.sql`.
+
+- Every Gemini call (agent answers, "Generate reply", website import) records
+  the model that answered and its exact token counts (input, cached, output)
+  per business and period.
+- Super-admin → Businesses shows the cost per business for its current
+  period (hover for the split per model) and the total at the top, with the
+  share of cached tokens.
+- Cost = tokens × each model's price. Prices are the `GEMINI_PRICES` setting
+  (USD per 1M tokens: input, cached input, output), default:
+  `{"gemini-3.1-flash-lite": [0.25, 0.025, 1.50], "gemini-3.5-flash-lite": [0.30, 0.03, 2.50], "gemini-3-flash-preview": [0.50, 0.05, 3.00]}`.
+  Set it on Render if Google changes its prices (ai.google.dev/pricing).
+  Compare the total with Google Cloud → Billing now and then.
+
 ## Knowledge from the website
 
 **Setup:** Supabase → SQL Editor → run `supabase/migrations/0011_site_import.sql`.
@@ -356,7 +372,7 @@ Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
 - The AI tokens count toward the business's usage like answers do.
 
 ### Closed beta checklist
-1. Run migrations 0004–0012 in Supabase (in order) if not done yet.
+1. Run migrations 0004–0013 in Supabase (in order) if not done yet.
 2. Gemini: make sure billing is on for the API key — the Privacy Policy says
    messages are not used to train AI models, which holds on the paid tier.
 3. In Zernio: webhook set, payment method added (needed for email).
