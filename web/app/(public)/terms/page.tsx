@@ -68,11 +68,14 @@ export default function TermsPage() {
 
       <h2>6. Plans, limits and payment</h2>
       <ul>
-        <li>Each plan has limits (for example conversations, channels, knowledge size and team members), shown on your
-          Plan page. When the conversation limit is reached, the AI agent stops answering new conversations until the
-          next period or an upgrade; your team still receives them.</li>
-        <li>The Free plan is a one-time allowance. Paid plans are billed per month in advance at the price shown when you
-          subscribe. Until online payment is available, plan changes are arranged with us directly.</li>
+        <li>Each plan has limits (for example AI conversations, channels, knowledge size and team members), shown on your
+          Plan page. AI conversations include the agent&apos;s answers and replies your team writes with AI. When the
+          limit is reached, the AI stops answering new conversations until the next period or an upgrade; your team
+          still receives them. Conversations your team handles without AI are not limited, subject to fair use.</li>
+        <li>New businesses start with a free trial that ends after 14 days or 50 AI conversations, whichever comes
+          first. After the trial, the AI pauses until you choose a plan. Paid plans are billed per month in advance at
+          the price shown when you subscribe. Until online payment is available, plan changes are arranged with us
+          directly.</li>
         <li>We may change prices or plans for new subscribers. Your current plan keeps its terms until you change or
           cancel it; if we must change the price of an existing plan, we will tell you at least 30 days before.</li>
         <li>Fees already paid are not refunded, except where the law requires it.</li>

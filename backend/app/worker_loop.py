@@ -49,13 +49,15 @@ def handle_reply(payload: dict) -> str:
 
     # The plan's conversation quota: a new conversation counts once; when the
     # quota is used up, the team gets it instead of the agent.
-    if not usage.allowed(usage.consume(thread["tenant_id"], thread_id)):
+    quota = usage.consume(thread["tenant_id"], thread_id)
+    if not usage.allowed(quota):
+        reason = usage.over_reason(quota)
         changed = db.update("threads", {"id": f"eq.{thread_id}", "status": "eq.bot"},
-                            {"status": "escalated", "escalated_at": _now(), "escalation_reason": usage.OVER_REASON})
+                            {"status": "escalated", "escalated_at": _now(), "escalation_reason": reason})
         if changed:
             db.insert("messages", {"tenant_id": thread["tenant_id"], "thread_id": thread_id, "role": "system",
-                                   "content": f"Escalated to the team: {usage.OVER_REASON}"})
-            alerts.queue_alert(thread["tenant_id"], thread_id, "escalated", usage.OVER_REASON)
+                                   "content": f"Escalated to the team: {reason}"})
+            alerts.queue_alert(thread["tenant_id"], thread_id, "escalated", reason)
         return "over-quota"
 
     contact = db.select_one("contacts", {"select": "*", "id": f"eq.{thread['contact_id']}"}) or {}

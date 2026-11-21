@@ -10,7 +10,7 @@ export type Me = {
   plan: {
     code: string;
     name: string;
-    billing_period: "one_time" | "monthly";
+    billing_period: "one_time" | "monthly" | "trial";
     conversation_quota: number;
     conversations_used: number;
     max_channels: number;
@@ -18,6 +18,8 @@ export type Me = {
     seats?: number;
     show_branding: boolean;
     period_end: string | null;
+    trial_ends_at?: string | null;
+    trial_ended?: boolean;
   } | null;
 };
 

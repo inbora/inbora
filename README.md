@@ -313,6 +313,29 @@ Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
   from signup and the login pages. English only. They name "Inbora, Israel" —
   add the legal entity when it exists, and have a lawyer review them.
 
+## Plans, trial and Custom
+
+**Setup:** Supabase → SQL Editor → run `supabase/migrations/0012_plans_trial_custom.sql`.
+
+- **Plans:** Starter $29 (100 AI conversations, any 2 channels, 15,000
+  characters, 1 member, "Powered by Inbora"), Business $49 (500, all 4,
+  50,000, 5 members), Pro $89 (2,000, all 4, 100,000, 10 members). AI
+  conversations = agent answers and AI-written replies ("Generate reply");
+  conversations handled by the team alone are unlimited. Free and Growth are
+  retired; businesses already on them keep their terms.
+- **Trial:** every new business starts on it — everything in Business, ends
+  after 14 days or 50 AI conversations, whichever first. Then the AI pauses
+  (new conversations go to the team, AI drafts stop) and the panel shows
+  "Your free trial has ended". Length and conversations are editable in
+  Super-admin → Plans → Trial. Card-at-signup and automatic renewal come with
+  the payment provider.
+- **Starter** can't be chosen while more than 2 channels are connected.
+- **Custom:** on the Plan page the business asks for a price (the form starts
+  from Pro's values, plus special requests). You see it on top of
+  Super-admin → Businesses, type a monthly price and "Send offer" (emailed to
+  the business, valid 14 days). "Accept offer" makes a private plan for that
+  business and moves it there; you get an email to arrange payment.
+
 ## Knowledge from the website
 
 **Setup:** Supabase → SQL Editor → run `supabase/migrations/0011_site_import.sql`.
@@ -333,7 +356,7 @@ Super-admin emails come from the `platform_admins` table (contact@inbora.ai).
 - The AI tokens count toward the business's usage like answers do.
 
 ### Closed beta checklist
-1. Run migrations 0004–0011 in Supabase (in order) if not done yet.
+1. Run migrations 0004–0012 in Supabase (in order) if not done yet.
 2. Gemini: make sure billing is on for the API key — the Privacy Policy says
    messages are not used to train AI models, which holds on the paid tier.
 3. In Zernio: webhook set, payment method added (needed for email).

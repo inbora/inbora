@@ -6,7 +6,7 @@ import { api, ApiError } from "@/lib/apiClient";
 import { useI18n } from "@/lib/i18n/client";
 
 export type Plan = {
-  id: string; code: string; name: string; price_usd: number; billing_period: "one_time" | "monthly";
+  id: string; code: string; name: string; price_usd: number; billing_period: "one_time" | "monthly" | "trial"; trial_days?: number | null;
   conversation_quota: number; max_channels: number; kb_char_limit: number; seats: number;
   show_branding: boolean; is_public: boolean; is_signup_default: boolean; active: boolean;
 };
@@ -14,6 +14,9 @@ export type Tenant = {
   id: string; name: string; status: "active" | "suspended"; created_at: string; plan: string | null; plan_id: string | null;
   used: number; quota: number; bonus: number; channels: string[]; broken: string[]; members: number;
 };
+export type CustomRequest = { id: string; tenant_id: string; tenant: string | null; current: string | null; status: "open" | "offered";
+  conversations: number; kb_chars: number; seats: number; notes: string | null; offer_price: number | null;
+  offer_expires_at: string | null; expired: boolean; created_at: string };
 export type PlanRequest = { id: string; tenant_id: string; tenant: string; plan_id: string; plan: string; current: string | null; created_at: string };
 type ErrorRow = { id: number; kind: string; where: string; message: string; detail: string | null; count: number;
   first_at: string; last_at: string; business: string | null };
@@ -26,8 +29,9 @@ const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w
 
 /** The Super-admin page: businesses (and plan requests), plans, errors and
     data-deletion requests, as tabs. */
-export default function AdminConsole({ plans, tenants, requests, counts, initialTab }: {
-  plans: Plan[]; tenants: Tenant[]; requests: PlanRequest[]; counts: { errors: number; deletions: number }; initialTab: Tab;
+export default function AdminConsole({ plans, tenants, requests, custom, counts, initialTab }: {
+  plans: Plan[]; tenants: Tenant[]; requests: PlanRequest[]; custom: CustomRequest[]; counts: { errors: number; deletions: number };
+  initialTab: Tab;
 }) {
   const { t } = useI18n();
   const a = t.admin;
@@ -41,7 +45,7 @@ export default function AdminConsole({ plans, tenants, requests, counts, initial
   }
 
   const tabs: [Tab, string, number][] = [
-    ["businesses", a.tenants, requests.length],
+    ["businesses", a.tenants, requests.length + custom.filter((c) => c.status === "open").length],
     ["plans", a.plans, 0],
     ["errors", a.errors, counts.errors],
     ["deletion", a.deletion, counts.deletions],
@@ -56,11 +60,88 @@ export default function AdminConsole({ plans, tenants, requests, counts, initial
           </button>
         ))}
       </div>
-      {tab === "businesses" && <Businesses plans={plans} tenants={tenants} requests={requests} />}
+      {tab === "businesses" && (
+        <>
+          {custom.length > 0 && <CustomRequests rows={custom} />}
+          <Businesses plans={plans} tenants={tenants} requests={requests} />
+        </>
+      )}
       {tab === "plans" && <Plans plans={plans} />}
       {tab === "errors" && <Errors />}
       {tab === "deletion" && <Deletions />}
     </>
+  );
+}
+
+// ── Custom plan requests: send a price; the business accepts from its Plan page
+
+function CustomRequests({ rows }: { rows: CustomRequest[] }) {
+  const { t, lang } = useI18n();
+  const a = t.admin;
+  const nf = new Intl.NumberFormat(lang);
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [prices, setPrices] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
+
+  async function run(id: string, fn: () => Promise<unknown>) {
+    setBusy(id);
+    try {
+      await fn();
+      setEditing((e) => ({ ...e, [id]: false }));
+      router.refresh();
+    } catch {
+      window.alert(a.actionError);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>{a.customRequests} ({nf.format(rows.length)})</h2>
+      {rows.map((r) => {
+        const price = prices[r.id] ?? (r.offer_price != null ? String(r.offer_price) : "");
+        const asking = r.status === "open" || editing[r.id];
+        return (
+          <div key={r.id} className="cr">
+            <div className="cr-top">
+              <b>{r.tenant}</b>
+              {r.current && <span className="pill">{r.current}</span>}
+              <span className="hint">{new Date(r.created_at).toLocaleDateString(lang)}</span>
+            </div>
+            <div className="cr-terms">
+              {fill(a.customTerms, { conv: nf.format(r.conversations), kb: nf.format(r.kb_chars), seats: r.seats })}
+            </div>
+            {r.notes && <div className="cr-notes" dir="auto">{r.notes}</div>}
+            <div className="cr-act">
+              {asking ? (
+                <>
+                  <span dir="ltr">$</span>
+                  <input dir="ltr" inputMode="decimal" aria-label={a.price} value={price}
+                    onChange={(e) => setPrices((p) => ({ ...p, [r.id]: e.target.value.replace(/[^\d.]/g, "") }))} />
+                  <span className="hint">/ {a.monthShort}</span>
+                  <button className="btn btn-sm" disabled={!!busy || !(Number(price) > 0)}
+                    onClick={() => run(r.id, () => api(`/admin/custom/${r.id}/offer`, { method: "POST", body: JSON.stringify({ price_usd: Number(price) }) }))}>
+                    {a.sendOffer}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className={`pill ${r.expired ? "pill-error" : "pill-on"}`}>
+                    {r.expired ? a.offerExpired : fill(a.offerSent, {
+                      price: nf.format(r.offer_price ?? 0), date: new Date(r.offer_expires_at!).toLocaleDateString(lang) })}
+                  </span>
+                  <button className="link-btn" onClick={() => setEditing((e) => ({ ...e, [r.id]: true }))}>{a.changePrice}</button>
+                </>
+              )}
+              <button className="link-btn" disabled={!!busy}
+                onClick={() => run(r.id, () => api(`/admin/custom/${r.id}/dismiss`, { method: "POST" }))}>{a.dismiss}</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -279,7 +360,11 @@ function Plans({ plans }: { plans: Plan[] }) {
                   </div>
                 </td>
                 <td className="nowrap" dir="ltr">${nf.format(p.price_usd)}{p.billing_period === "monthly" ? ` / ${a.monthShort}` : ""}</td>
-                <td className="nowrap">{nf.format(p.conversation_quota)} {p.billing_period === "monthly" ? a.monthly : a.oneTime}</td>
+                <td className="nowrap">
+                  {nf.format(p.conversation_quota)}{" "}
+                  {p.billing_period === "monthly" ? a.monthly
+                    : p.billing_period === "trial" ? fill(a.trialFor, { n: p.trial_days ?? 14 }) : a.oneTime}
+                </td>
                 <td>{p.max_channels}</td>
                 <td>{nf.format(p.kb_char_limit)}</td>
                 <td>{p.seats}</td>
@@ -317,8 +402,16 @@ function Plans({ plans }: { plans: Plan[] }) {
                   onChange={(e) => setEditing((p) => p && { ...p, billing_period: e.target.value as Plan["billing_period"] })}>
                   <option value="monthly">{a.monthly}</option>
                   <option value="one_time">{a.oneTime}</option>
+                  <option value="trial">{a.trial}</option>
                 </select>
               </div>
+              {editing.billing_period === "trial" && (
+                <div className="field">
+                  <label>{a.trialDays}</label>
+                  <input type="number" min={1} max={90} dir="ltr" value={editing.trial_days ?? 14}
+                    onChange={(e) => setEditing((p) => p && { ...p, trial_days: Number(e.target.value) })} />
+                </div>
+              )}
               {num("conversation_quota", a.quota)}
               {num("max_channels", a.channels)}
               {num("kb_char_limit", a.kb, 1000)}

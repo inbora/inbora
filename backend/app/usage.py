@@ -11,6 +11,7 @@ from . import db, jobs
 from .config import get_settings
 
 OVER_REASON = "The plan's conversation limit is reached"
+TRIAL_REASON = "The trial has ended"
 
 TEXTS = {
     "en": {
@@ -71,6 +72,10 @@ def allowed(res: dict) -> bool:
     return res.get("status") != "over"
 
 
+def over_reason(res: dict) -> str:
+    return TRIAL_REASON if res.get("trial_ended") else OVER_REASON
+
+
 def record_tokens(tenant_id: str, tokens: dict | None) -> None:
     """Add the AI tokens one answer used to the business's current period."""
     if not tokens or not any(tokens.values()):
@@ -99,7 +104,7 @@ def handle_usage_alert(payload: dict) -> str:
     t = TEXTS.get(lang, TEXTS["en"])
     title = t[level]
     body = t[f"body_{level}"].format(used=cur.get("used", 0), quota=cur.get("quota", 0), plan=plan)
-    if cur.get("period_end"):
+    if cur.get("period_end") and (sub.get("limits") or {}).get("billing_period", "monthly") == "monthly":
         body += " " + t["renews"].format(date=str(cur["period_end"])[:10])
     url = f"{get_settings().app_url.rstrip('/')}/plan"
     direction = "rtl" if lang in ("he", "ar") else "ltr"

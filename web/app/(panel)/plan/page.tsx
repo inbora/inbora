@@ -12,6 +12,40 @@ export default async function PlanPage() {
     return <h1>{t.plan.title}</h1>;
   }
 
+  if (plan.billing_period === "trial") {
+    const daysLeft = plan.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(plan.trial_ends_at) - Date.now()) / 86_400_000)) : 0;
+    const used = Math.min(plan.conversations_used, plan.conversation_quota || plan.conversations_used);
+    const tpct = plan.conversation_quota ? Math.min(100, Math.round((used / plan.conversation_quota) * 100)) : 100;
+    return (
+      <>
+        <h1>{t.plan.title}: {t.plan.trialBadge}</h1>
+        <div className={`card trial-card${plan.trial_ended ? " trial-ended" : ""}`}>
+          {plan.trial_ended ? (
+            <>
+              <h2>{t.plan.trialEnded}</h2>
+              <p className="hint">{t.plan.trialEndedHint}</p>
+            </>
+          ) : (
+            <>
+              <div className="trial-head">
+                <span className="trial-pill">{t.plan.trialBadge}</span>
+                <b>{daysLeft <= 1 ? t.plan.lastDay : t.plan.daysLeft.replace("{n}", nf.format(daysLeft))}</b>
+              </div>
+              <div className="meter" role="progressbar" aria-valuenow={tpct} aria-valuemin={0} aria-valuemax={100}>
+                <span className={tpct >= 100 ? "meter-full" : undefined} style={{ width: `${tpct}%` }} />
+              </div>
+              <div className="hint">
+                {t.plan.trialUsage.replace("{used}", nf.format(used)).replace("{quota}", nf.format(plan.conversation_quota))}
+                {" · "}{t.plan.trialHint}
+              </div>
+            </>
+          )}
+        </div>
+        <PlanPicker />
+      </>
+    );
+  }
+
   const pct = plan.conversation_quota
     ? Math.min(100, Math.round((plan.conversations_used / plan.conversation_quota) * 100))
     : 0;

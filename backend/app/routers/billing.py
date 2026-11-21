@@ -22,9 +22,19 @@ def plans(tenant_id: str = Depends(current_tenant_id)):
                                "order": "sort_order.asc"})
     req = db.select_one("upgrade_requests", {"select": "created_at,plans(code,name)", "tenant_id": f"eq.{tenant_id}",
                                              "status": "eq.open"})
+    pro = next((p for p in rows if p["code"] == "pro"), None) or (rows[-1] if rows else {})
     return {"plans": rows, "current": _current_code(tenant_id),
             "request": {"plan_code": req["plans"]["code"], "plan_name": req["plans"]["name"],
-                        "created_at": req["created_at"]} if req and req.get("plans") else None}
+                        "created_at": req["created_at"]} if req and req.get("plans") else None,
+            "channels_used": _channels_used(tenant_id),
+            "custom": billing.custom_view(billing.open_custom(tenant_id)),
+            # The Custom form starts from the biggest plan's values.
+            "custom_defaults": {"conversations": pro.get("conversation_quota") or 2000,
+                                "kb_chars": pro.get("kb_char_limit") or 100000, "seats": pro.get("seats") or 10}}
+
+
+def _channels_used(tenant_id: str) -> int:
+    return len(db.select("channels", {"select": "id", "tenant_id": f"eq.{tenant_id}", "status": "neq.disconnected"}))
 
 
 class CheckoutIn(BaseModel):
@@ -42,6 +52,10 @@ def checkout(body: CheckoutIn, user: CurrentUser = Depends(current_user),
         raise HTTPException(404, "Plan not found")
     if plan["code"] == _current_code(tenant_id):
         raise HTTPException(409, detail={"code": "current_plan"})
+    used = _channels_used(tenant_id)
+    if used > int(plan["max_channels"]):
+        # Fewer channels on that plan: disconnect some first.
+        raise HTTPException(422, detail={"code": "channel_count", "limit": plan["max_channels"], "used": used})
     return billing.provider().create_checkout(tenant_id, plan, user.id)
 
 
@@ -55,3 +69,32 @@ def cancel_request(tenant_id: str = Depends(current_tenant_id)):
 async def webhook(provider_name: str, request: Request):
     raw = await request.body()
     return billing.provider(provider_name).handle_webhook(raw, dict(request.headers))
+
+
+# ── Custom plan
+
+class CustomIn(BaseModel):
+    conversations: int = Field(ge=1, le=1_000_000)
+    kb_chars: int = Field(ge=1000, le=5_000_000)
+    seats: int = Field(ge=1, le=1000)
+    notes: str = Field(default="", max_length=2000)
+
+
+@router.post("/custom", status_code=201)
+def request_custom(body: CustomIn, user: CurrentUser = Depends(current_user),
+                   tenant_id: str = Depends(current_tenant_id)):
+    """Ask for a Custom plan; the super-admin replies with a price."""
+    row = billing.request_custom(tenant_id, user.id, body.conversations, body.kb_chars, body.seats, body.notes.strip())
+    return {"custom": billing.custom_view(row)}
+
+
+@router.delete("/custom")
+def withdraw_custom(tenant_id: str = Depends(current_tenant_id)):
+    db.update("custom_requests", {"tenant_id": f"eq.{tenant_id}", "status": "in.(open,offered)"}, {"status": "dismissed"})
+    return {"ok": True}
+
+
+@router.post("/custom/{request_id}/accept")
+def accept_custom(request_id: str, tenant_id: str = Depends(current_tenant_id)):
+    plan = billing.accept_offer(tenant_id, request_id)
+    return {"ok": True, "plan": plan["name"]}

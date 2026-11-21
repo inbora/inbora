@@ -243,8 +243,10 @@ def draft(thread_id: str, body: DraftRequest, user: CurrentUser = Depends(curren
 
     channel = db.select_one("channels", {"select": "type", "id": f"eq.{t['channel_id']}"}) or {}
     contact = db.select_one("contacts", {"select": "name", "id": f"eq.{t['contact_id']}"}) or {}
-    if not usage.allowed(usage.consume(tenant_id, thread_id)):
-        raise HTTPException(402, detail={"code": "quota", "message": "All conversations on your plan are used."})
+    quota = usage.consume(tenant_id, thread_id)
+    if not usage.allowed(quota):
+        raise HTTPException(402, detail={"code": "trial_ended" if quota.get("trial_ended") else "quota",
+                                         "message": usage.over_reason(quota)})
     ctx = context.load(tenant_id)
     me = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}
     toolbox = Toolbox(tenant_id, thread_id=thread_id, dry_run=True)

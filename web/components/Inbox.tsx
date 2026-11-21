@@ -521,7 +521,9 @@ function ThreadView({ id, onBack, onChanged, onRead, visible, onArchive, onDelet
       setUndoText(text);
       setText(r.text);
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 402 ? ti.draftQuota : ti.draftError);
+      setError(e instanceof ApiError && e.status === 402
+        ? ((e.detail as { code?: string } | null)?.code === "trial_ended" ? ti.draftTrialEnded : ti.draftQuota)
+        : ti.draftError);
     } finally {
       setBusy("");
     }

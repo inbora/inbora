@@ -26,7 +26,8 @@ def _now() -> str:
 
 @router.get("/overview")
 def overview(_: CurrentUser = Depends(super_admin)):
-    plans = db.select("plans", {"select": "*", "order": "sort_order.asc,created_at.asc"})
+    # Custom plans made for one business aren't listed (the business row shows them).
+    plans = db.select("plans", {"select": "*", "code": "not.like.custom-*", "order": "sort_order.asc,created_at.asc"})
     tenants = db.select("tenants", {
         "select": "id,name,slug,status,created_at,"
                   "subscriptions(status,limits,plan_id,period_start),"
@@ -66,9 +67,15 @@ def overview(_: CurrentUser = Depends(super_admin)):
         "plan_id": r["plan_id"], "plan": (r.get("plans") or {}).get("name"),
         "current": current.get(r["tenant_id"]), "created_at": r["created_at"],
     } for r in reqs]
+    custom = [{**billing.custom_view(c), "tenant_id": c["tenant_id"], "tenant": (c.get("tenants") or {}).get("name"),
+               "current": current.get(c["tenant_id"])}
+              for c in db.select("custom_requests", {
+                  "select": "id,tenant_id,status,conversations,kb_chars,seats,notes,offer_price,offer_sent_at,"
+                            "offer_expires_at,created_at,tenants(name)",
+                  "status": "in.(open,offered)", "order": "created_at.asc"})]
     open_errors = db.select("error_events", {"select": "id", "limit": "100"})
     open_deletions = db.select("deletion_requests", {"select": "id", "status": "eq.open"})
-    return {"plans": plans, "tenants": rows, "requests": requests,
+    return {"plans": plans, "tenants": rows, "requests": requests, "custom": custom,
             "counts": {"errors": len(open_errors), "deletions": len(open_deletions)}}
 
 
@@ -143,7 +150,8 @@ def set_status(tenant_id: str, body: StatusChange, _: CurrentUser = Depends(supe
 class PlanIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     price_usd: float = Field(ge=0, le=100000)
-    billing_period: Literal["monthly", "one_time"] = "monthly"
+    billing_period: Literal["monthly", "one_time", "trial"] = "monthly"
+    trial_days: int | None = Field(default=None, ge=1, le=90)
     conversation_quota: int = Field(ge=0, le=10_000_000)
     max_channels: int = Field(ge=1, le=20)
     kb_char_limit: int = Field(ge=1000, le=5_000_000)
@@ -172,7 +180,8 @@ def create_plan(body: PlanCreate, _: CurrentUser = Depends(super_admin)):
 class PlanEdit(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=60)
     price_usd: float | None = Field(default=None, ge=0, le=100000)
-    billing_period: Literal["monthly", "one_time"] | None = None
+    billing_period: Literal["monthly", "one_time", "trial"] | None = None
+    trial_days: int | None = Field(default=None, ge=1, le=90)
     conversation_quota: int | None = Field(default=None, ge=0, le=10_000_000)
     max_channels: int | None = Field(default=None, ge=1, le=20)
     kb_char_limit: int | None = Field(default=None, ge=1000, le=5_000_000)
@@ -220,6 +229,25 @@ def reorder_plans(body: PlanOrder, _: CurrentUser = Depends(super_admin)):
 @router.post("/requests/{request_id}/dismiss")
 def dismiss_request(request_id: str, _: CurrentUser = Depends(super_admin)):
     db.update("upgrade_requests", {"id": f"eq.{request_id}", "status": "eq.open"},
+              {"status": "dismissed", "resolved_at": _now()})
+    return {"ok": True}
+
+
+# ── Custom plan requests
+
+class Offer(BaseModel):
+    price_usd: float = Field(gt=0, le=100000)
+
+
+@router.post("/custom/{request_id}/offer")
+def send_offer(request_id: str, body: Offer, _: CurrentUser = Depends(super_admin)):
+    """Send the business a price; it can accept from its Plan page for 14 days."""
+    return billing.custom_view(billing.send_offer(request_id, body.price_usd))
+
+
+@router.post("/custom/{request_id}/dismiss")
+def dismiss_custom(request_id: str, _: CurrentUser = Depends(super_admin)):
+    db.update("custom_requests", {"id": f"eq.{request_id}", "status": "in.(open,offered)"},
               {"status": "dismissed", "resolved_at": _now()})
     return {"ok": True}
 

@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import AdminConsole, { type Plan, type PlanRequest, type Tenant } from "@/components/AdminConsole";
+import AdminConsole, { type CustomRequest, type Plan, type PlanRequest, type Tenant } from "@/components/AdminConsole";
 import { apiGet } from "@/lib/api";
 import { getI18n } from "@/lib/i18n/server";
 import { getMe } from "@/lib/me";
 
-type Overview = { plans: Plan[]; tenants: Tenant[]; requests: PlanRequest[]; counts: { errors: number; deletions: number } };
+type Overview = { plans: Plan[]; tenants: Tenant[]; requests: PlanRequest[]; custom?: CustomRequest[];
+  counts: { errors: number; deletions: number } };
 const TABS = ["businesses", "plans", "errors", "deletion"] as const;
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -22,7 +23,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {!data ? (
         <div className="alert alert-warn">{t.panel.apiDown}</div>
       ) : (
-        <AdminConsole plans={data.plans} tenants={data.tenants} requests={data.requests}
+        <AdminConsole plans={data.plans} tenants={data.tenants} requests={data.requests} custom={data.custom ?? []}
           counts={data.counts ?? { errors: 0, deletions: 0 }} initialTab={initialTab} />
       )}
     </>

@@ -50,6 +50,8 @@ def me(user: CurrentUser = Depends(current_user)):
             "seats": limits.get("seats"),
             "show_branding": bool(limits.get("show_branding", True)),
             "period_end": sub["period_end"],
+            "trial_ends_at": sub["period_end"] if limits.get("billing_period") == "trial" else None,
+            "trial_ended": bool(cur.get("trial_ended")),
         }
 
     profile = db.select_one("profiles", {"select": "full_name", "id": f"eq.{user.id}"}) or {}

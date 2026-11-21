@@ -25,7 +25,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           <div className="topbar-title">{me?.tenant.name ?? t.appName}</div>
           <div className="topbar-meta">
             {me?.user.is_super_admin && <span className="badge badge-admin">{t.nav.admin}</span>}
-            {me?.plan && <span className="badge">{me.plan.name}</span>}
+            {me?.plan && <span className="badge">{me.plan.billing_period === "trial" ? t.plan.trialBadge : me.plan.name}</span>}
             <span dir="ltr">{email}</span>
           </div>
         </header>
@@ -44,7 +44,13 @@ export default async function PanelLayout({ children }: { children: React.ReactN
               <Link href="/channels">{t.panel.channelAlertLink} →</Link>
             </div>
           )}
-          {me?.plan && me.plan.conversations_used >= me.plan.conversation_quota && (
+          {me?.plan?.trial_ended && (
+            <div className="alert alert-warn trial-alert">
+              <b>{t.panel.trialEnded}</b> {t.panel.trialEndedText}{" "}
+              <Link href="/plan">{t.panel.trialEndedLink} →</Link>
+            </div>
+          )}
+          {me?.plan && !me.plan.trial_ended && me.plan.conversations_used >= me.plan.conversation_quota && (
             <div className="alert alert-warn quota-alert">
               {t.panel.quotaAlert.replace("{n}", String(me.plan.conversation_quota))}{" "}
               <Link href="/plan">{t.panel.quotaAlertLink} →</Link>
